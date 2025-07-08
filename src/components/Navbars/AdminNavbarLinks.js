@@ -15,7 +15,12 @@ import avatar1 from "assets/img/avatars/avatar1.png";
 import avatar2 from "assets/img/avatars/avatar2.png";
 import avatar3 from "assets/img/avatars/avatar3.png";
 // Custom Icons
-import { ArgonLogoDark, ArgonLogoLight, ChakraLogoDark, ChakraLogoLight, ProfileIcon, SettingsIcon } from "components/Icons/Icons";
+import { ProfileIcon, SettingsIcon } from "components/Icons/Icons";
+import { FiLogOut } from "react-icons/fi";
+import { useHistory } from "react-router-dom";
+import { useState } from "react";
+import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure } from "@chakra-ui/react";
+import NavbarLogo from "./NavbarLogo";
 // Custom Components
 import { ItemContent } from "components/Menu/ItemContent";
 import { SearchBar } from "components/Navbars/SearchBar/SearchBar";
@@ -31,7 +36,7 @@ export default function HeaderLinks(props) {
     fixed,
     scrolled,
     secondary,
-    onOpen,
+    onOpen: parentOnOpen, // rename to avoid conflict
     ...rest
   } = props;
 
@@ -46,71 +51,32 @@ export default function HeaderLinks(props) {
   if (secondary) {
     navbarIcon = "white";
   }
+  const history = useHistory();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const handleLogout = () => {
+    // Remove session and redirect to sign in
+    localStorage.removeItem("user");
+    onClose();
+    setTimeout(() => {
+      history.push("/auth/signin");
+    }, 100);
+  };
+
   return (
     <Flex
       pe={{ sm: "0px", md: "16px" }}
       w={{ sm: "100%", md: "auto" }}
       alignItems='center'
       flexDirection='row'>
-      <SearchBar me='18px' />
-      <NavLink to='/auth/signin'>
-        <Button
-          ms='0px'
-          px='0px'
-          me={{ sm: "2px", md: "16px" }}
-          color={navbarIcon}
-          variant='no-effects'
-          rightIcon={
-            document.documentElement.dir ? (
-              ""
-            ) : (
-              <ProfileIcon color={navbarIcon} w='22px' h='22px' me='0px' />
-            )
-          }
-          leftIcon={
-            document.documentElement.dir ? (
-              <ProfileIcon color={navbarIcon} w='22px' h='22px' me='0px' />
-            ) : (
-              ""
-            )
-          }>
-          <Text display={{ sm: "none", md: "flex" }}>Sign In</Text>
-        </Button>
-      </NavLink>
+      {/* Removed SearchBar, Sign In button, and Settings icon for admin navbar */}
       <SidebarResponsive
         hamburgerColor={"white"}
-        logo={
-          <Stack direction='row' spacing='12px' align='center' justify='center'>
-            {colorMode === "dark" ? (
-              <ArgonLogoLight w='74px' h='27px' />
-            ) : (
-              <ArgonLogoDark w='74px' h='27px' />
-            )}
-            <Box
-              w='1px'
-              h='20px'
-              bg={colorMode === "dark" ? "white" : "gray.700"}
-            />
-            {colorMode === "dark" ? (
-              <ChakraLogoLight w='82px' h='21px' />
-            ) : (
-              <ChakraLogoDark w='82px' h='21px' />
-            )}
-          </Stack>
-        }
+        logo={<NavbarLogo />}
         colorMode={colorMode}
         secondary={props.secondary}
         routes={routes}
         {...rest}
-      />
-      <SettingsIcon
-        cursor='pointer'
-        ms={{ base: "16px", xl: "0px" }}
-        me='16px'
-        onClick={props.onOpen}
-        color={navbarIcon}
-        w='18px'
-        h='18px'
       />
       <Menu>
         <MenuButton>
@@ -148,6 +114,27 @@ export default function HeaderLinks(props) {
           </Flex>
         </MenuList>
       </Menu>
+      {/* Logout Icon Only */}
+      <Box as="span" ml={4} cursor="pointer" onClick={onOpen} title="Logout">
+        <FiLogOut size={24} color={navbarIcon} />
+      </Box>
+      {/* Logout Confirmation Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Logout</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            Are you sure you want to log out?
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="orange" mr={3} onClick={handleLogout}>
+              Yes, Logout
+            </Button>
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Flex>
   );
 }

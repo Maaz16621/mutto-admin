@@ -17,7 +17,7 @@ import {
 // Layout components
 import AdminNavbar from "components/Navbars/AdminNavbar.js";
 import Sidebar from "components/Sidebar/Sidebar.js";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Redirect, Route, Switch } from "react-router-dom";
 import routes from "routes.js";
 // Custom Chakra theme
@@ -28,11 +28,22 @@ import PanelContainer from "../components/Layout/PanelContainer";
 import PanelContent from "../components/Layout/PanelContent";
 import bgAdmin from "assets/img/admin-background.png";
 
+import { useHistory } from "react-router-dom";
+
 export default function Dashboard(props) {
   const { ...rest } = props;
   // states and functions
   const [fixed, setFixed] = useState(false);
   const { colorMode } = useColorMode();
+  const history = useHistory();
+
+  // On mount, redirect to sign-in if not logged in
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (!user) {
+      history.push("/");
+    }
+  }, [history]);
   // functions for changing the states from components
   const getRoute = () => {
     return window.location.pathname !== "/admin/full-screen-maps";
