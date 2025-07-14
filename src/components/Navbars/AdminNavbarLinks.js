@@ -1,3 +1,4 @@
+
 // Chakra Icons
 import { BellIcon } from "@chakra-ui/icons";
 // Chakra Imports
@@ -69,7 +70,6 @@ export default function HeaderLinks(props) {
       w={{ sm: "100%", md: "auto" }}
       alignItems='center'
       flexDirection='row'>
-      {/* Removed SearchBar, Sign In button, and Settings icon for admin navbar */}
       <SidebarResponsive
         hamburgerColor={"white"}
         logo={<NavbarLogo />}
@@ -114,10 +114,16 @@ export default function HeaderLinks(props) {
           </Flex>
         </MenuList>
       </Menu>
-      {/* Logout Icon Only */}
-      <Box as="span" ml={4} cursor="pointer" onClick={onOpen} title="Logout">
-        <FiLogOut size={24} color={navbarIcon} />
-      </Box>
+      <Menu>
+        <MenuButton as={Button} bg="transparent" _hover={{ bg: "transparent" }} _active={{ bg: "transparent" }}>
+          <ProfileIcon color={navbarIcon} w='18px' h='18px' />
+        </MenuButton>
+        <MenuList bg={menuBg} minW="120px" maxW="150px" w="auto">
+          <MenuItem onClick={() => history.push("/admin/profile")}>Profile</MenuItem>
+          <MenuItem icon={<FiLogOut />} onClick={onOpen}>Logout</MenuItem>
+        </MenuList>
+      </Menu>
+      {/* Removed separate logout button */}
       {/* Logout Confirmation Modal */}
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />

@@ -1,5 +1,7 @@
+
 // Chakra imports
 import {
+  Avatar,
   Box,
   Button,
   Flex,
@@ -21,6 +23,8 @@ import {
 } from "@chakra-ui/react";
 // Custom components
 import Card from "components/Card/Card.js";
+import CardBody from "components/Card/CardBody.js";
+import CardHeader from "components/Card/CardHeader.js";
 import BarChart from "components/Charts/BarChart";
 import LineChart from "components/Charts/LineChart";
 import IconBox from "components/Icons/IconBox";
@@ -31,7 +35,22 @@ import {
   GlobeIcon,
   WalletIcon,
 } from "components/Icons/Icons.js";
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { collection, onSnapshot, query } from "firebase/firestore";
+import { firestore } from "../../firebase";
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import ImageArchitect1 from "assets/img/ImageArchitect1.png";
+
+delete L.Icon.Default.prototype._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+    iconUrl: require('leaflet/dist/images/marker-icon.png'),
+    shadowUrl: require('leaflet/dist/images/marker-shadow.png')
+});
+
 // Variables
 import {
   barChartData,
@@ -41,15 +60,32 @@ import {
 } from "variables/charts";
 
 export default function Dashboard() {
-  // Chakra Color Mode
+  const [workers, setWorkers] = useState([]);
   const iconBlue = useColorModeValue("#FF7D2E", "#FF7D2E");
   const iconBoxInside = useColorModeValue("white", "white");
   const textColor = useColorModeValue("gray.700", "white");
-  const tableRowColor = useColorModeValue("#F7FAFC", "navy.900");
-  const borderColor = useColorModeValue("gray.200", "gray.600");
-  const textTableColor = useColorModeValue("gray.500", "white");
+  const mapRef = useRef();
+
+  useEffect(() => {
+    const q = query(collection(firestore, "workers"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const workersData = [];
+      querySnapshot.forEach((doc) => {
+        workersData.push({ id: doc.id, ...doc.data() });
+      });
+      setWorkers(workersData);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const { colorMode } = useColorMode();
+
+  const handleWorkerCardClick = (worker) => {
+    if (worker.location && worker.location.latitude && worker.location.longitude) {
+      mapRef.current.flyTo([worker.location.latitude, worker.location.longitude], 15);
+    }
+  };
 
   return (
     <Flex flexDirection='column' pt={{ base: "120px", md: "75px" }}>
@@ -254,7 +290,41 @@ export default function Dashboard() {
             <BarChart chartData={barChartData} chartOptions={barChartOptions} />
           </Box>
         </Card>
-  
+        <Box gridColumn={{ lg: "1 / 3" }}>
+          <Text fontSize='lg' color={textColor} fontWeight='bold' mb='20px'>
+            Worker Locations
+          </Text>
+          <Card p='0px' maxW={{ sm: "320px", md: "100%" }}>
+            <CardBody>
+              <Box position="relative">
+                <MapContainer ref={mapRef} center={[25.2048, 55.2708]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  {workers.map(worker => (
+                    worker.location && worker.location.latitude && worker.location.longitude && (
+                      <Marker key={worker.id} position={[worker.location.latitude, worker.location.longitude]} />
+                    )
+                  ))}
+                </MapContainer>
+                <Box position="absolute" top="10px" right="10px" zIndex="1000" bg="transparent" p="10px" borderRadius="md" maxH="380px" overflowY="auto">
+                  {workers.filter(w => w.status === 'active').map(worker => (
+                    <Card key={worker.id} mb="10px" bg="white" p="10px" onClick={() => handleWorkerCardClick(worker)} cursor="pointer">
+                      <Flex align="center">
+                        <Avatar src={worker.profilePic || ImageArchitect1} size="sm" mr="10px" />
+                        <Box>
+                          <Text fontWeight="bold">{worker.userName}</Text>
+                          <Text fontSize="sm">{worker.jobStatus || 'Resting'}</Text>
+                        </Box>
+                      </Flex>
+                    </Card>
+                  ))}
+                </Box>
+              </Box>
+            </CardBody>
+          </Card>
+        </Box>
       </Grid>
     </Flex>
   );

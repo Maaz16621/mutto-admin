@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { InputGroup, InputLeftElement } from "@chakra-ui/react";
+import { SearchIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
@@ -26,10 +28,16 @@ import {
   Select,
   Switch,
   Tooltip,
-  Icon
+  Icon,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  IconButton
 } from "@chakra-ui/react";
 import "react-quill/dist/quill.snow.css";
 import ReactQuill from "react-quill";
+import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useSortBy, usePagination } from "react-table";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { firestore, storage } from "../../firebase";
@@ -38,21 +46,26 @@ import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 import { SimpleGrid } from "@chakra-ui/react";
+import { Tag, TagLabel, TagCloseButton } from "@chakra-ui/react";
 export default function ServiceManager() {
+// Named export for sidebar/routing compatibility
   const [services, setServices] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [search, setSearch] = useState("");
+  const [subCategories, setSubCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
     description: "",
-    categoryId: "",
+    subCategoryId: "",
     cost: "",
     duration: "",
     graceTime: "",
     bufferTime: "",
     active: true,
-    iconUrl: ""
+    iconUrl: "",
+    relatedServices: [] // new field for related services
   });
+  const [serviceInput, setServiceInput] = useState("");
   const [iconFile, setIconFile] = useState(null);
   const [iconPreview, setIconPreview] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -61,12 +74,12 @@ export default function ServiceManager() {
   const toast = useToast();
 
   // Fetch categories for dropdown
-  const fetchCategories = async () => {
+  const fetchSubCategories = async () => {
     try {
-      const querySnapshot = await getDocs(collection(firestore, "categories"));
-      setCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const querySnapshot = await getDocs(collection(firestore, "subCategories"));
+      setSubCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
-      toast({ title: "Error fetching categories", status: "error", description: err.message });
+      toast({ title: "Error fetching sub-categories", status: "error", description: err.message });
     }
   };
 
@@ -83,14 +96,14 @@ export default function ServiceManager() {
   };
 
   useEffect(() => {
-    fetchCategories();
+    fetchSubCategories();
     fetchServices();
   }, []);
 
   // Add or update service
   const handleSave = async () => {
-    if (!form.name || !form.categoryId || !form.cost || !form.duration) {
-      toast({ title: "Name, Category, Cost, and Duration are required", status: "warning" });
+    if (!form.name || !form.subCategoryId || !form.cost || !form.duration) {
+      toast({ title: "Name, Sub-Category, Cost, and Duration are required", status: "warning" });
       return;
     }
     setLoading(true);
@@ -118,7 +131,7 @@ export default function ServiceManager() {
       const data = {
         name: form.name,
         description: form.description,
-        categoryId: form.categoryId,
+        subCategoryId: form.subCategoryId,
         cost: Number(form.cost),
         duration: Number(form.duration),
         graceTime: form.graceTime ? Number(form.graceTime) : 0,
@@ -126,6 +139,7 @@ export default function ServiceManager() {
         active: !!form.active,
         iconUrl: iconUrl || "",
         updatedAt: serverTimestamp(),
+        relatedServices: form.relatedServices || [],
       };
       if (selectedService) {
         await updateDoc(doc(firestore, "services", selectedService.id), data);
@@ -139,11 +153,12 @@ export default function ServiceManager() {
       }
       fetchServices();
       onClose();
-      setForm({ name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "" });
+      setForm({ name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "", relatedServices: [] });
       setIconFile(null);
       setIconPreview("");
       setUploadProgress(0);
       setSelectedService(null);
+      setServiceInput("");
     } catch (err) {
       toast({ title: "Error saving service", status: "error", description: err.message });
     }
@@ -157,19 +172,21 @@ export default function ServiceManager() {
       ? {
           name: service.name || "",
           description: service.description || "",
-          categoryId: service.categoryId || "",
+          subCategoryId: service.subCategoryId || "",
           cost: service.cost || "",
           duration: service.duration || "",
           graceTime: service.graceTime || "",
           bufferTime: service.bufferTime || "",
           active: service.active !== undefined ? service.active : true,
-          iconUrl: service.iconUrl || ""
+          iconUrl: service.iconUrl || "",
+          relatedServices: service.relatedServices || [],
         }
-      : { name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "" }
+      : { name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "", relatedServices: [] }
     );
     setIconFile(null);
     setIconPreview(service && service.iconUrl ? service.iconUrl : "");
     setUploadProgress(0);
+    setServiceInput("");
     onOpen();
   };
 
@@ -195,11 +212,14 @@ export default function ServiceManager() {
     {
       Header: "Icon",
       accessor: "iconUrl",
-    Cell: ({ value }) => value ? <img src={value} alt="icon" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-",
-        disableSortBy: true,
+      Cell: ({ value }) => (value ? <img src={value} alt="icon" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-"),
+      disableSortBy: true,
     },
     { Header: "Name", accessor: "name" },
-    { Header: "Category", accessor: "categoryId", Cell: ({ value }) => categories.find(c => c.id === value)?.name || value },
+    { Header: "Sub-Category", accessor: "subCategoryId", Cell: ({ value }) => {
+      const category = subCategories.find(c => c.id === value);
+      return category ? category.name : (value || "-");
+    }},
     { Header: "Cost", accessor: "cost" },
     { Header: "Duration (min)", accessor: "duration" },
     { Header: "Grace (min)", accessor: "graceTime" },
@@ -209,14 +229,36 @@ export default function ServiceManager() {
       Header: "Actions",
       id: "actions",
       Cell: ({ row }) => (
-        <Flex>
-          <Button size="sm" onClick={() => openEdit(row.original)} colorScheme="blue" mr={2}>Edit</Button>
-          <Button size="sm" colorScheme="red" onClick={() => setDeleteModal({ open: true, service: row.original })}>Delete</Button>
-        </Flex>
+        <Menu>
+          <MenuButton
+            as={IconButton}
+            aria-label="Options"
+            icon={<BsThreeDotsVertical />}
+            variant="ghost"
+          />
+          <MenuList>
+            <MenuItem onClick={() => openEdit(row.original)}>Edit</MenuItem>
+            <MenuItem onClick={() => setDeleteModal({ open: true, service: row.original })}>Delete</MenuItem>
+          </MenuList>
+        </Menu>
       ),
       disableSortBy: true,
     },
-  ], [categories]);
+  ], [subCategories]);
+
+  // Filtered data for search
+  const filteredServices = useMemo(() => {
+    if (!search) return services;
+    const q = search.toLowerCase();
+    return services.filter(s =>
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.cost && String(s.cost).includes(q)) ||
+      (s.duration && String(s.duration).includes(q)) ||
+      (s.graceTime && String(s.graceTime).includes(q)) ||
+      (s.bufferTime && String(s.bufferTime).includes(q)) ||
+      (s.subCategoryId && subCategories.find(c => c.id === s.subCategoryId)?.name?.toLowerCase().includes(q))
+    );
+  }, [search, services]);
 
   const {
     getTableProps,
@@ -236,7 +278,7 @@ export default function ServiceManager() {
   } = useTable(
     {
       columns,
-      data: services,
+      data: filteredServices,
       initialState: { pageSize: 10 },
       autoResetPage: false,
     },
@@ -247,12 +289,28 @@ export default function ServiceManager() {
   return (
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
       <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="0px">
-        <CardHeader p="6px 0px 22px 0px">
-          <Flex justify="space-between" align="center">
-            <Heading size="md">Service Manager</Heading>
-            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Service</Button>
-          </Flex>
-        </CardHeader>
+      <CardHeader p="6px 0px 22px 0px">
+        <Flex justify="space-between" align="center">
+          <Heading size="md">Service Manager</Heading>
+          <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Service</Button>
+        </Flex>
+      </CardHeader>
+      <Flex mb={4} gap={4} flexWrap="wrap" align="center" justify="space-between">
+        <InputGroup maxW="250px" boxShadow="sm">
+          <InputLeftElement pointerEvents="none">
+            <SearchIcon color="gray.400" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search by name, category, or value"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            size="sm"
+            bg="white"
+            borderRadius="md"
+            boxShadow="sm"
+          />
+        </InputGroup>
+      </Flex>
         <CardBody>
           {loading && <Flex justify="center" align="center" minH="100px"><Spinner size="lg" /></Flex>}
           {!loading && (
@@ -389,14 +447,14 @@ export default function ServiceManager() {
                   </FormControl>
                   <FormControl mb={3} isRequired>
                     <FormLabel display="flex" alignItems="center" gap={1}>
-                      Category
-                      <Tooltip label="The category this service belongs to (e.g., Wash, Detailing)." placement="right" hasArrow>
+                      Sub-Category
+                      <Tooltip label="The sub-category this service belongs to." placement="right" hasArrow>
                         <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
                       </Tooltip>
                     </FormLabel>
-                    <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
-                      <option value="">Select Category</option>
-                      {categories.map(cat => (
+                    <Select value={form.subCategoryId} onChange={e => setForm(f => ({ ...f, subCategoryId: e.target.value }))}>
+                      <option value="">Select Sub-Category</option>
+                      {subCategories.map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
                     </Select>
@@ -446,6 +504,7 @@ export default function ServiceManager() {
                     </FormLabel>
                     <Switch isChecked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
                   </FormControl>
+                  {/* Removed Related Services field from Service modal as requested */}
                   <Box gridColumn={{ base: '1', md: '1 / span 2' }}>
                     <FormControl mb={3}>
                       <FormLabel display="flex" alignItems="center" gap={1}>

@@ -2,17 +2,20 @@
 
 import React, { Component }  from 'react';
 import Dashboard from "views/Dashboard/Dashboard.js";
-import Tables from "views/Dashboard/Tables.js";
-import Billing from "views/Dashboard/Billing.js";
-import RTLPage from "views/RTL/RTLPage.js";
 import Profile from "views/Dashboard/Profile.js";
 import SignIn from "views/Pages/SignIn.js";
-import SignUp from "views/Pages/SignUp.js";
+import ResetPassword from "views/Pages/ResetPassword.js";
 
 import StaffManagement from "views/Dashboard/StaffManagement.js";
 import CategoryManager from "views/Dashboard/CategoryManager.js";
 import ServiceManager from "views/Dashboard/ServiceManager.js";
-
+import ProductManager from "views/Dashboard/ProductManager.js";
+import CouponManager from "views/Dashboard/CouponManager.js";
+import DiscountManager from "views/Dashboard/DiscountManager.js";
+import Settings from "views/Dashboard/Settings.js"; // Import the new Settings component
+import AdsManager from "views/Dashboard/AdsManager.js";
+import SubCategoryManager from "views/Dashboard/SubCategoryManager.js";
+import Feedback from "views/Dashboard/Feedback.js";
 
 import {
   HomeIcon,
@@ -22,8 +25,12 @@ import {
   DocumentIcon,
   RocketIcon,
   SupportIcon,
+  SettingsIcon, // Import SettingsIcon
+  
 } from "components/Icons/Icons";
-import { IoPeople } from 'react-icons/io5';
+import {  IoCube, IoDocument, IoDocumentOutline, IoPeople } from 'react-icons/io5';
+import { FaBullhorn, FaPercentage } from 'react-icons/fa';
+import { RiSpeaker3Line } from 'react-icons/ri';
 
 var dashRoutes = [
 
@@ -35,14 +42,7 @@ var dashRoutes = [
     component: Dashboard,
     layout: "/admin",
   },
-  {
-    path: "/tables",
-    name: "Tables",
-    // rtlName removed
-    icon: <StatsIcon color='inherit' />,
-    component: Tables,
-    layout: "/admin",
-  },
+
   {
     path: "/profile",
     name: "Profile",
@@ -63,6 +63,14 @@ var dashRoutes = [
     layout: "/auth",
     sidebar: false, // Hide from sidebar
   },
+  {
+    path: "/reset-password",
+    name: "Reset Password",
+    icon: <PersonIcon color='inherit' />,
+    component: ResetPassword,
+    layout: "/auth",
+    sidebar: false, // Hide from sidebar
+  },
     {
     path: "/staff-management",
     name: "Staff Management",
@@ -74,8 +82,16 @@ var dashRoutes = [
   {
     path: "/category-manager",
     name: "Category Manager",
-    icon: <DocumentIcon color='inherit' />,
+    icon: <IoDocumentOutline color='inherit' />,
     component: CategoryManager,
+    layout: "/admin",
+    
+  },
+    {
+    path: "/sub-category-manager",
+    name: "Sub-Category Manager",
+    icon: <IoDocument color='inherit' />,
+    component: SubCategoryManager,
     layout: "/admin",
   },
   {
@@ -83,6 +99,58 @@ var dashRoutes = [
     name: "Service Manager",
     icon: <RocketIcon color='inherit' />,
     component: ServiceManager,
+    layout: "/admin",
+  },
+  {
+    path: "/product-library",
+    name: "Addon Products",
+     icon: <IoCube color='inherit' />,
+    component: ProductManager,
+    layout: "/admin",
+  },
+  {
+    path: "/coupon-manager",
+    name: "Coupon Management",
+    icon: <CreditIcon color='inherit' />,
+    component: CouponManager,
+    layout: "/admin",
+  },
+  {
+    path: "/discount-manager",
+    name: "Discount Management",
+    icon: <FaPercentage color='inherit' />,
+    component: DiscountManager,
+    layout: "/admin",
+  },
+  {
+    path: "/worker-management",
+    name: "Worker Management",
+    icon: <IoPeople color='inherit' />,
+    component: require("views/Dashboard/WorkerManagement.js").default,
+    layout: "/admin",
+  },
+
+  {
+    path: "/ads-manager",
+    name: "Ads Manager",
+    icon: <FaBullhorn color='inherit' />,
+    component: AdsManager,
+    layout: "/admin",
+  },
+
+
+  {
+    path: "/feedback",
+    name: "Feedback",
+    icon: <RiSpeaker3Line color='inherit' />,
+    component: Feedback,
+    layout: "/admin",
+  },
+      {
+    path: "/settings",
+    name: "Settings",
+    icon: <SettingsIcon color='inherit' />,
+    component: Settings,
     layout: "/admin",
   },
 ];

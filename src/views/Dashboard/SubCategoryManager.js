@@ -9,20 +9,19 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
-export default function CategoryManager() {
-  const [deleteModal, setDeleteModal] = useState({ open: false, category: null });
+export default function SubCategoryManager() {
+  const [deleteModal, setDeleteModal] = useState({ open: false, subCategory: null });
+  const [subCategories, setSubCategories] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [form, setForm] = useState({ name: "", description: "", iconUrl: "" });
+  const [selectedSubCategory, setSelectedSubCategory] = useState(null);
+  const [form, setForm] = useState({ name: "", mainCategoryId: "", iconUrl: "" });
   const [iconFile, setIconFile] = useState(null);
   const [globalFilter, setGlobalFilter] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  // Fetch categories
   const fetchCategories = async () => {
-    setLoading(true);
     try {
       const q = query(collection(firestore, "categories"));
       const querySnapshot = await getDocs(q);
@@ -31,17 +30,29 @@ export default function CategoryManager() {
     } catch (err) {
       toast({ title: "Error fetching categories", status: "error", description: err.message });
     }
+  };
+
+  const fetchSubCategories = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(firestore, "subCategories"));
+      const querySnapshot = await getDocs(q);
+      const subCategoryList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSubCategories(subCategoryList);
+    } catch (err) {
+      toast({ title: "Error fetching sub-categories", status: "error", description: err.message });
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchCategories();
+    fetchSubCategories();
   }, []);
 
-  // Add or update category
   const handleSave = async () => {
-    if (!form.name) {
-      toast({ title: "Category name required", status: "warning", position: "top-right" });
+    if (!form.name || !form.mainCategoryId) {
+      toast({ title: "Sub-category name and main category are required", status: "warning", position: "top-right" });
       return;
     }
     setLoading(true);
@@ -49,7 +60,7 @@ export default function CategoryManager() {
       let iconUrl = form.iconUrl;
       if (iconFile) {
         try {
-          const iconRef = ref(storage, `category-icons/${Date.now()}_${iconFile.name}`);
+          const iconRef = ref(storage, `sub-category-icons/${Date.now()}_${iconFile.name}`);
           await uploadBytes(iconRef, iconFile);
           iconUrl = await getDownloadURL(iconRef);
         } catch (uploadErr) {
@@ -65,51 +76,47 @@ export default function CategoryManager() {
           return;
         }
       }
-      if (selectedCategory) {
-        // Edit category
-        await updateDoc(doc(firestore, "categories", selectedCategory.id), {
+      if (selectedSubCategory) {
+        await updateDoc(doc(firestore, "subCategories", selectedSubCategory.id), {
           name: form.name,
-          description: form.description,
+          mainCategoryId: form.mainCategoryId,
           iconUrl,
         });
-        toast({ title: "Category updated", position: "top-right" });
+        toast({ title: "Sub-category updated", position: "top-right" });
       } else {
-        // Add category with Firestore auto-generated unique ID
-        const docRef = await setDoc(doc(collection(firestore, "categories")), {
+        await setDoc(doc(collection(firestore, "subCategories")), {
           name: form.name,
-          description: form.description,
+          mainCategoryId: form.mainCategoryId,
           iconUrl,
           createdAt: serverTimestamp(),
         });
-        toast({ title: "Category added", position: "top-right" });
+        toast({ title: "Sub-category added", position: "top-right" });
       }
-      fetchCategories();
+      fetchSubCategories();
       onClose();
-      setForm({ name: "", description: "", iconUrl: "" });
+      setForm({ name: "", mainCategoryId: "", iconUrl: "" });
       setIconFile(null);
-      setSelectedCategory(null);
+      setSelectedSubCategory(null);
     } catch (err) {
-      toast({ title: "Error saving category", status: "error", description: err.message, position: "top-right" });
+      toast({ title: "Error saving sub-category", status: "error", description: err.message, position: "top-right" });
     }
     setLoading(false);
   };
 
-  // Open modal for add/edit
-  const openEdit = (category) => {
-    setSelectedCategory(category);
-    setForm(category
+  const openEdit = (subCategory) => {
+    setSelectedSubCategory(subCategory);
+    setForm(subCategory
       ? {
-          name: category.name || "",
-          description: category.description || "",
-          iconUrl: category.iconUrl || "",
+          name: subCategory.name || "",
+          mainCategoryId: subCategory.mainCategoryId || "",
+          iconUrl: subCategory.iconUrl || "",
         }
-      : { name: "", description: "", iconUrl: "" }
+      : { name: "", mainCategoryId: "", iconUrl: "" }
     );
     setIconFile(null);
     onOpen();
   };
 
-  // DataTable columns
   const columns = useMemo(() => [
     {
       Header: "Icon",
@@ -124,9 +131,10 @@ export default function CategoryManager() {
       Filter: () => null,
     },
     {
-      Header: "Description",
-      accessor: "description",
-      Filter: () => null,
+        Header: "Main Category",
+        accessor: "mainCategoryId",
+        Cell: ({ value }) => categories.find(c => c.id === value)?.name || value,
+        Filter: () => null,
     },
     {
       Header: "Created At",
@@ -147,56 +155,50 @@ export default function CategoryManager() {
           />
           <MenuList>
             <MenuItem onClick={() => openEdit(row.original)}>Edit</MenuItem>
-            <MenuItem onClick={() => setDeleteModal({ open: true, category: row.original })}>Delete</MenuItem>
+            <MenuItem onClick={() => setDeleteModal({ open: true, subCategory: row.original })}>Delete</MenuItem>
           </MenuList>
         </Menu>
       ),
       disableSortBy: true,
       Filter: () => null,
     },
-  ], []);
+  ], [categories]);
 
-  // Delete category (with icon)
   const handleDelete = async () => {
-    const category = deleteModal.category;
-    if (!category) return;
+    const subCategory = deleteModal.subCategory;
+    if (!subCategory) return;
     setLoading(true);
     try {
-      // Delete icon from storage if exists
-      if (category.iconUrl) {
+      if (subCategory.iconUrl) {
         try {
-          const iconRef = ref(storage, category.iconUrl);
+          const iconRef = ref(storage, subCategory.iconUrl);
           await deleteObject(iconRef);
         } catch (err) {
-          // Ignore storage error, show toast
           toast({ title: "Warning", description: "Could not delete icon from storage.", status: "warning", position: "top-right" });
         }
       }
-      // Delete Firestore doc
-      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "categories", category.id)));
-      toast({ title: "Category deleted", status: "success", position: "top-right" });
-      fetchCategories();
+      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "subCategories", subCategory.id)));
+      toast({ title: "Sub-category deleted", status: "success", position: "top-right" });
+      fetchSubCategories();
     } catch (err) {
-      toast({ title: "Error deleting category", description: err.message, status: "error", position: "top-right" });
+      toast({ title: "Error deleting sub-category", description: err.message, status: "error", position: "top-right" });
     }
-    setDeleteModal({ open: false, category: null });
+    setDeleteModal({ open: false, subCategory: null });
     setLoading(false);
   };
 
-  // Filtering logic
   const filteredData = useMemo(() => {
-    let data = categories;
+    let data = subCategories;
     if (globalFilter) {
       const lower = globalFilter.toLowerCase();
       data = data.filter(row =>
-        row.name?.toLowerCase().includes(lower) ||
-        row.description?.toLowerCase().includes(lower)
+        row.name?.toLowerCase().includes(lower)
       );
     }
     return data;
-  }, [categories, globalFilter]);
+  }, [subCategories, globalFilter]);
 
-  const {
+  const { 
     getTableProps,
     getTableBodyProps,
     headerGroups,
@@ -225,19 +227,17 @@ export default function CategoryManager() {
     usePagination
   );
 
-  // Sync search input with react-table
   useEffect(() => {
     setTableGlobalFilter(globalFilter);
   }, [globalFilter, setTableGlobalFilter]);
 
   return (
-    
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
       <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="0px">
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
-            <Heading size="md">Category Manager</Heading>
-            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Category</Button>
+            <Heading size="md">Sub-Category Manager</Heading>
+            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Sub-Category</Button>
           </Flex>
         </CardHeader>
         <CardBody>
@@ -247,7 +247,7 @@ export default function CategoryManager() {
                 <SearchIcon color="gray.400" />
               </InputLeftElement>
               <Input
-                placeholder="Search by name or description"
+                placeholder="Search by name"
                 value={globalFilter}
                 onChange={e => setGlobalFilter(e.target.value)}
                 size="sm"
@@ -256,7 +256,6 @@ export default function CategoryManager() {
                 boxShadow="sm"
               />
             </InputGroup>
-            {/* No status filter needed */}
           </Flex>
           {loading && <Flex justify="center" align="center" minH="100px"><Spinner size="lg" /></Flex>}
           {!loading && (
@@ -287,7 +286,6 @@ export default function CategoryManager() {
               </Tbody>
             </Table>
           )}
-          {/* Pagination Controls */}
           {!loading && pageOptions.length > 1 && (
             <Flex mt={4} align="center" justify="flex-end" gap={2} flexWrap="wrap">
               <Button size="sm" onClick={() => gotoPage(0)} disabled={!canPreviousPage}>&lt;&lt;</Button>
@@ -317,7 +315,7 @@ export default function CategoryManager() {
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
         <ModalContent maxH="90vh">
-          <ModalHeader>{selectedCategory ? "Edit Category" : "Add Category"}</ModalHeader>
+          <ModalHeader>{selectedSubCategory ? "Edit Sub-Category" : "Add Sub-Category"}</ModalHeader>
           <ModalCloseButton />
           <ModalBody overflowY="auto">
             {loading && (
@@ -326,30 +324,20 @@ export default function CategoryManager() {
               </Flex>
             )}
             <FormControl mb={3} isRequired>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Name
-                <Tooltip label="The name of the category (e.g., Wash, Detailing)." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
+              <FormLabel>Main Category</FormLabel>
+              <Select value={form.mainCategoryId} onChange={e => setForm(f => ({ ...f, mainCategoryId: e.target.value }))}>
+                <option value="">Select Main Category</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl mb={3} isRequired>
+              <FormLabel>Name</FormLabel>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Description
-                <Tooltip label="A short description of the category." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
-              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            </FormControl>
-            <FormControl mb={3}>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Icon Image
-                <Tooltip label="Upload an icon image for this category (optional)." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
+              <FormLabel>Icon Image</FormLabel>
               <Input type="file" accept="image/*" onChange={e => setIconFile(e.target.files[0])} />
               {form.iconUrl && !iconFile && (
                 <Box mt={2}><img src={form.iconUrl} alt="icon" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} /></Box>
@@ -368,22 +356,20 @@ export default function CategoryManager() {
         </ModalContent>
       </Modal>
       
-      <Modal isOpen={deleteModal.open} onClose={() => setDeleteModal({ open: false, category: null })} isCentered>
+      <Modal isOpen={deleteModal.open} onClose={() => setDeleteModal({ open: false, subCategory: null })} isCentered>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Delete Category</ModalHeader>
+          <ModalHeader>Delete Sub-Category</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            Are you sure you want to delete category <b>{deleteModal.category?.name}</b>? This cannot be undone.
+            Are you sure you want to delete sub-category <b>{deleteModal.subCategory?.name}</b>? This cannot be undone.
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="red" mr={3} onClick={handleDelete} isLoading={loading} loadingText="Deleting...">Delete</Button>
-            <Button variant="ghost" onClick={() => setDeleteModal({ open: false, category: null })} isDisabled={loading}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setDeleteModal({ open: false, subCategory: null })} isDisabled={loading}>Cancel</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
     </Flex>
   );
 }
-
-

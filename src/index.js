@@ -25,6 +25,8 @@ import RTLLayout from "layouts/RTL.js"; // Chakra imports
 import { ChakraProvider } from "@chakra-ui/react";
 // Custom Chakra theme
 import theme from "theme/theme.js";
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
 
 ReactDOM.render(
   <ChakraProvider theme={theme} resetCss={false} position="relative">
