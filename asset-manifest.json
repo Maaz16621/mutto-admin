@@ -1,22 +1,22 @@
 {
   "files": {
-    "main.css": "/static/css/main.ebdd1e1c.css",
-    "main.js": "/static/js/main.53003975.js",
-    "static/media/signInImage.png": "/static/media/signInImage.dc6e0e9a8fb1a247b2d6.png",
-    "static/media/admin-background.png": "/static/media/admin-background.45f1ec8a837a63b77c20.png",
-    "static/media/ImageArchitect1.png": "/static/media/ImageArchitect1.032614a5ad672027d4b3.png",
-    "static/media/logo.png": "/static/media/logo.983ad6a25bb7aefc81af.png",
-    "static/media/avatar2.png": "/static/media/avatar2.5692c39db4f8c0ea999e.png",
-    "static/media/avatar3.png": "/static/media/avatar3.9f646ac5920fa40adf00.png",
-    "static/media/avatar1.png": "/static/media/avatar1.eeef2af6dfcd3ff23cb8.png",
-    "static/media/SidebarHelpImage.png": "/static/media/SidebarHelpImage.bace667c8b452f88fa9d.png",
-    "static/media/spritesheet.svg": "/static/media/spritesheet.a4e0eb7ad904a4858361.svg",
-    "index.html": "/index.html",
-    "main.ebdd1e1c.css.map": "/static/css/main.ebdd1e1c.css.map",
-    "main.53003975.js.map": "/static/js/main.53003975.js.map"
+    "main.css": "/mutto-admin/static/css/main.aae314f3.css",
+    "main.js": "/mutto-admin/static/js/main.f47dbae3.js",
+    "static/media/signInImage.png": "/mutto-admin/static/media/signInImage.dc6e0e9a8fb1a247b2d6.png",
+    "static/media/admin-background.png": "/mutto-admin/static/media/admin-background.45f1ec8a837a63b77c20.png",
+    "static/media/ImageArchitect1.png": "/mutto-admin/static/media/ImageArchitect1.032614a5ad672027d4b3.png",
+    "static/media/logo.png": "/mutto-admin/static/media/logo.983ad6a25bb7aefc81af.png",
+    "static/media/avatar2.png": "/mutto-admin/static/media/avatar2.5692c39db4f8c0ea999e.png",
+    "static/media/avatar3.png": "/mutto-admin/static/media/avatar3.9f646ac5920fa40adf00.png",
+    "static/media/avatar1.png": "/mutto-admin/static/media/avatar1.eeef2af6dfcd3ff23cb8.png",
+    "static/media/SidebarHelpImage.png": "/mutto-admin/static/media/SidebarHelpImage.bace667c8b452f88fa9d.png",
+    "static/media/spritesheet.svg": "/mutto-admin/static/media/spritesheet.a4e0eb7ad904a4858361.svg",
+    "index.html": "/mutto-admin/index.html",
+    "main.aae314f3.css.map": "/mutto-admin/static/css/main.aae314f3.css.map",
+    "main.f47dbae3.js.map": "/mutto-admin/static/js/main.f47dbae3.js.map"
   },
   "entrypoints": [
-    "static/css/main.ebdd1e1c.css",
-    "static/js/main.53003975.js"
+    "static/css/main.aae314f3.css",
+    "static/js/main.f47dbae3.js"
   ]
 }
