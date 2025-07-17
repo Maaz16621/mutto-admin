@@ -32,20 +32,21 @@ export default function Dashboard(props) {
   const [loadingPermissions, setLoadingPermissions] = useState(true);
   const [accessibleRoutes, setAccessibleRoutes] = useState([]); // Make accessibleRoutes a state variable
 
-  const hasPermission = (route, permissions) => {
-    // If a route doesn't require a specific permission, grant access
+
+
+  const hasPermission = React.useCallback((route, permissions) => {
+    const currentPermissions = Array.isArray(permissions) ? permissions : [];
     if (!route.permission) {
       return true;
     }
-    // Check if the user has the required permission
-    return permissions.includes(route.permission);
-  };
+    return currentPermissions.includes(route.permission);
+  }, []);
 
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchPermissionsAndHandleRedirect = async () => {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user || !user.uid) {
-        history.push("/auth/signin"); // Redirect to sign-in if no user
+        history.push("/auth/signin");
         return;
       }
 
@@ -57,108 +58,80 @@ export default function Dashboard(props) {
         if (staffDocSnap.exists()) {
           const staffData = staffDocSnap.data();
           fetchedPermissions = staffData.permissions || [];
-          setUserPermissions(fetchedPermissions);
-        } else {
-          history.push("/auth/signin");
         }
+        setUserPermissions(fetchedPermissions);
 
-        // Set accessibleRoutes after permissions are fetched
-        setAccessibleRoutes(routes.filter(route => hasPermission(route, fetchedPermissions)));
+        const filteredRoutes = routes.filter(route => hasPermission(route, fetchedPermissions));
+        setAccessibleRoutes(filteredRoutes);
 
+        setLoadingPermissions(false);
+
+        const currentPath = history.location.pathname;
+        const isCurrentPathAccessible = filteredRoutes.some(
+          (route) => route.layout + route.path === currentPath
+        );
+
+        if (currentPath === "/admin" || !isCurrentPathAccessible) {
+          const firstAccessibleRoute = filteredRoutes.find(
+            (route) => route.layout === "/admin" && route.path
+          );
+          if (firstAccessibleRoute) {
+            history.push(firstAccessibleRoute.layout + firstAccessibleRoute.path);
+          } else {
+            history.push("/auth/signin");
+          }
+        }
       } catch (error) {
         console.error("Error fetching staff permissions:", error);
-        history.push("/auth/signin"); // Redirect on error
-      } finally {
-        setLoadingPermissions(false);
+        history.push("/auth/signin");
       }
     };
 
-    fetchPermissions();
-  }, [history]); // Only history in dependency array
-
-  // This useEffect will run after permissions are loaded and accessibleRoutes is updated
-  useEffect(() => {
-    if (!loadingPermissions && accessibleRoutes.length > 0) { // Ensure permissions are loaded and accessibleRoutes is populated
-      const currentPath = history.location.pathname;
-      const isCurrentPathAccessible = accessibleRoutes.some(
-        (route) => route.layout + route.path === currentPath
-      );
-
-      if (currentPath === "/admin" || !isCurrentPathAccessible) {
-        const firstAccessibleRoute = accessibleRoutes.find(
-          (route) => route.layout === "/admin" && route.path
-        );
-        if (firstAccessibleRoute) {
-          history.push(firstAccessibleRoute.layout + firstAccessibleRoute.path);
-        } else {
-          history.push("/auth/signin");
-        }
-      }
-    }
-  }, [loadingPermissions, accessibleRoutes, history]);
-
-  useEffect(() => {
-    if (!loadingPermissions) { // Ensure permissions are loaded
-      const currentPath = history.location.pathname;
-      const isCurrentPathAccessible = accessibleRoutes.some(
-        (route) => route.layout + route.path === currentPath
-      );
-
-      if (currentPath === "/admin" || !isCurrentPathAccessible) {
-        const firstAccessibleRoute = accessibleRoutes.find(
-          (route) => route.layout === "/admin" && route.path
-        );
-        if (firstAccessibleRoute) {
-          history.push(firstAccessibleRoute.layout + firstAccessibleRoute.path);
-        } else {
-          history.push("/auth/signin");
-        }
-      }
-    }
-  }, [loadingPermissions, accessibleRoutes, history]);
+    fetchPermissionsAndHandleRedirect();
+  }, [history]); // Removed hasPermission from dependency array
 
   const getRoute = () => {
     return window.location.pathname !== "/admin/full-screen-maps";
   };
 
-  const getActiveRoute = (routes) => {
+  const getActiveRoute = (routesList) => {
     let activeRoute = "Default Brand Text";
-    for (let i = 0; i < routes.length; i++) {
-      if (routes[i].collapse) {
-        let collapseActiveRoute = getActiveRoute(routes[i].views);
+    for (let i = 0; i < routesList.length; i++) {
+      if (routesList[i].collapse) {
+        let collapseActiveRoute = getActiveRoute(routesList[i].views);
         if (collapseActiveRoute !== activeRoute) {
           return collapseActiveRoute;
         }
-      } else if (routes[i].category) {
-        let categoryActiveRoute = getActiveRoute(routes[i].views);
+      } else if (routesList[i].category) {
+        let categoryActiveRoute = getActiveRoute(routesList[i].views);
         if (categoryActiveRoute !== activeRoute) {
           return categoryActiveRoute;
         }
       } else {
         if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
+          window.location.href.indexOf(routesList[i].layout + routesList[i].path) !== -1
         ) {
-          return routes[i].name;
+          return routesList[i].name;
         }
       }
     }
     return activeRoute;
   };
 
-  const getActiveNavbar = (routes) => {
+  const getActiveNavbar = (routesList) => {
     let activeNavbar = false;
-    for (let i = 0; i < routes.length; i++) {
-      if (routes[i].category) {
-        let categoryActiveNavbar = getActiveNavbar(routes[i].views);
+    for (let i = 0; i < routesList.length; i++) {
+      if (routesList[i].category) {
+        let categoryActiveNavbar = getActiveNavbar(routesList[i].views);
         if (categoryActiveNavbar !== activeNavbar) {
           return categoryActiveNavbar;
         }
       } else {
         if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
+          window.location.href.indexOf(routesList[i].layout + routesList[i].path) !== -1
         ) {
-          if (routes[i].secondaryNavbar) {
-            return routes[i].secondaryNavbar;
+          if (routesList[i].secondaryNavbar) {
+            return routesList[i].secondaryNavbar;
           }
         }
       }
@@ -166,16 +139,19 @@ export default function Dashboard(props) {
     return activeNavbar;
   };
 
-  const getRoutes = (routes) => {
-    return routes.map((prop, key) => {
+  const getRoutes = (routesList) => {
+    if (!Array.isArray(routesList)) {
+      return [];
+    }
+    return routesList.map((prop, key) => {
       if (prop.collapse) {
-        return getRoutes(prop.views);
+        return getRoutes(Array.isArray(prop.views) ? prop.views : []);
       }
       if (prop.category === "account") {
-        return getRoutes(prop.views);
+        return getRoutes(Array.isArray(prop.views) ? prop.views : []);
       }
       if (prop.layout === "/admin") {
-        if (hasPermission(prop, userPermissions)) {
+        if (hasPermission(prop, userPermissions)) { // Pass userPermissions here
           return (
             <Route
               path={prop.layout + prop.path}
@@ -184,7 +160,6 @@ export default function Dashboard(props) {
             />
           );
         } else {
-          // If the route is not accessible, render a redirect to the first accessible route
           const firstAccessibleRoute = accessibleRoutes.find(
             (route) => route.layout === "/admin" && route.path
           );
@@ -252,7 +227,7 @@ export default function Dashboard(props) {
           <PanelContent>
             <PanelContainer>
               <Switch>
-                {getRoutes(routes)} {/* Use original routes here for routing logic, but permission check inside getRoutes */}
+                {getRoutes(routes, userPermissions)} {/* Pass userPermissions here */}
                 {/* No default redirect here, handled by useEffect and getRoutes */}
               </Switch>
             </PanelContainer>

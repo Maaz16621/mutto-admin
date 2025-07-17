@@ -2,7 +2,7 @@
 const admin = require('firebase-admin');
 
 // Use the correct path to your service account key
-const serviceAccount = require('./mutto-84d97-firebase-adminsdk-fbsvc-9166c974fe.json');
+const serviceAccount = require('./mutto-84d97-firebase-adminsdk-fbsvc-6baf4caccd.json');
 
 if (!admin.apps.length) {
   admin.initializeApp({
