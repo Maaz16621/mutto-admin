@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/mutto-admin/static/css/main.aae314f3.css",
-    "main.js": "/mutto-admin/static/js/main.8597eba1.js",
+    "main.js": "/mutto-admin/static/js/main.d0be3384.js",
     "static/media/signInImage.png": "/mutto-admin/static/media/signInImage.dc6e0e9a8fb1a247b2d6.png",
     "static/media/admin-background.png": "/mutto-admin/static/media/admin-background.45f1ec8a837a63b77c20.png",
     "static/media/ImageArchitect1.png": "/mutto-admin/static/media/ImageArchitect1.032614a5ad672027d4b3.png",
@@ -13,10 +13,10 @@
     "static/media/spritesheet.svg": "/mutto-admin/static/media/spritesheet.a4e0eb7ad904a4858361.svg",
     "index.html": "/mutto-admin/index.html",
     "main.aae314f3.css.map": "/mutto-admin/static/css/main.aae314f3.css.map",
-    "main.8597eba1.js.map": "/mutto-admin/static/js/main.8597eba1.js.map"
+    "main.d0be3384.js.map": "/mutto-admin/static/js/main.d0be3384.js.map"
   },
   "entrypoints": [
     "static/css/main.aae314f3.css",
-    "static/js/main.8597eba1.js"
+    "static/js/main.d0be3384.js"
   ]
 }
