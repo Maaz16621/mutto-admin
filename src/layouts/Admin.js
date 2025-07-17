@@ -1,13 +1,4 @@
-// Chakra imports
-import {
-  Portal,
-  useDisclosure,
-  Stack,
-  Box,
-  useColorMode,
-} from "@chakra-ui/react";
-import Configurator from "components/Configurator/Configurator";
-import Footer from "components/Footer/Footer.js";
+
 import {
   ArgonLogoDark,
   ArgonLogoLight,
@@ -15,39 +6,121 @@ import {
   ChakraLogoLight,
 } from "components/Icons/Icons";
 // Layout components
+import React, { useState, useEffect } from "react";
+import { Redirect, Route, Switch, useHistory } from "react-router-dom";
+import { Portal, useDisclosure, Box, useColorMode, Spinner, Flex } from "@chakra-ui/react";
+import { doc, getDoc } from "firebase/firestore";
+import { firestore } from "../firebase"; // Adjust path as needed
+
+import Configurator from "components/Configurator/Configurator";
+import Footer from "components/Footer/Footer.js";
 import AdminNavbar from "components/Navbars/AdminNavbar.js";
 import Sidebar from "components/Sidebar/Sidebar.js";
-import React, { useState, useEffect } from "react";
-import { Redirect, Route, Switch } from "react-router-dom";
-import routes from "routes.js";
-// Custom Chakra theme
 import FixedPlugin from "../components/FixedPlugin/FixedPlugin";
-// Custom components
 import MainPanel from "../components/Layout/MainPanel";
 import PanelContainer from "../components/Layout/PanelContainer";
 import PanelContent from "../components/Layout/PanelContent";
+import routes from "routes.js";
 import bgAdmin from "assets/img/admin-background.png";
-
-import { useHistory } from "react-router-dom";
 
 export default function Dashboard(props) {
   const { ...rest } = props;
-  // states and functions
   const [fixed, setFixed] = useState(false);
   const { colorMode } = useColorMode();
   const history = useHistory();
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
+  const [accessibleRoutes, setAccessibleRoutes] = useState([]); // Make accessibleRoutes a state variable
 
-  // On mount, redirect to sign-in if not logged in
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      history.push("/");
+  const hasPermission = (route, permissions) => {
+    // If a route doesn't require a specific permission, grant access
+    if (!route.permission) {
+      return true;
     }
-  }, [history]);
-  // functions for changing the states from components
+    // Check if the user has the required permission
+    return permissions.includes(route.permission);
+  };
+
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.uid) {
+        history.push("/auth/signin"); // Redirect to sign-in if no user
+        return;
+      }
+
+      try {
+        const staffDocRef = doc(firestore, "staff", user.uid);
+        const staffDocSnap = await getDoc(staffDocRef);
+
+        let fetchedPermissions = [];
+        if (staffDocSnap.exists()) {
+          const staffData = staffDocSnap.data();
+          fetchedPermissions = staffData.permissions || [];
+          setUserPermissions(fetchedPermissions);
+        } else {
+          history.push("/auth/signin");
+        }
+
+        // Set accessibleRoutes after permissions are fetched
+        setAccessibleRoutes(routes.filter(route => hasPermission(route, fetchedPermissions)));
+
+      } catch (error) {
+        console.error("Error fetching staff permissions:", error);
+        history.push("/auth/signin"); // Redirect on error
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+
+    fetchPermissions();
+  }, [history]); // Only history in dependency array
+
+  // This useEffect will run after permissions are loaded and accessibleRoutes is updated
+  useEffect(() => {
+    if (!loadingPermissions && accessibleRoutes.length > 0) { // Ensure permissions are loaded and accessibleRoutes is populated
+      const currentPath = history.location.pathname;
+      const isCurrentPathAccessible = accessibleRoutes.some(
+        (route) => route.layout + route.path === currentPath
+      );
+
+      if (currentPath === "/admin" || !isCurrentPathAccessible) {
+        const firstAccessibleRoute = accessibleRoutes.find(
+          (route) => route.layout === "/admin" && route.path
+        );
+        if (firstAccessibleRoute) {
+          history.push(firstAccessibleRoute.layout + firstAccessibleRoute.path);
+        } else {
+          history.push("/auth/signin");
+        }
+      }
+    }
+  }, [loadingPermissions, accessibleRoutes, history]);
+
+  useEffect(() => {
+    if (!loadingPermissions) { // Ensure permissions are loaded
+      const currentPath = history.location.pathname;
+      const isCurrentPathAccessible = accessibleRoutes.some(
+        (route) => route.layout + route.path === currentPath
+      );
+
+      if (currentPath === "/admin" || !isCurrentPathAccessible) {
+        const firstAccessibleRoute = accessibleRoutes.find(
+          (route) => route.layout === "/admin" && route.path
+        );
+        if (firstAccessibleRoute) {
+          history.push(firstAccessibleRoute.layout + firstAccessibleRoute.path);
+        } else {
+          history.push("/auth/signin");
+        }
+      }
+    }
+  }, [loadingPermissions, accessibleRoutes, history]);
+
   const getRoute = () => {
     return window.location.pathname !== "/admin/full-screen-maps";
   };
+
   const getActiveRoute = (routes) => {
     let activeRoute = "Default Brand Text";
     for (let i = 0; i < routes.length; i++) {
@@ -71,7 +144,7 @@ export default function Dashboard(props) {
     }
     return activeRoute;
   };
-  // This changes navbar state(fixed or not)
+
   const getActiveNavbar = (routes) => {
     let activeNavbar = false;
     for (let i = 0; i < routes.length; i++) {
@@ -92,6 +165,7 @@ export default function Dashboard(props) {
     }
     return activeNavbar;
   };
+
   const getRoutes = (routes) => {
     return routes.map((prop, key) => {
       if (prop.collapse) {
@@ -101,21 +175,44 @@ export default function Dashboard(props) {
         return getRoutes(prop.views);
       }
       if (prop.layout === "/admin") {
-        return (
-          <Route
-            path={prop.layout + prop.path}
-            component={prop.component}
-            key={key}
-          />
-        );
+        if (hasPermission(prop, userPermissions)) {
+          return (
+            <Route
+              path={prop.layout + prop.path}
+              component={prop.component}
+              key={key}
+            />
+          );
+        } else {
+          // If the route is not accessible, render a redirect to the first accessible route
+          const firstAccessibleRoute = accessibleRoutes.find(
+            (route) => route.layout === "/admin" && route.path
+          );
+          return (
+            <Route
+              path={prop.layout + prop.path}
+              render={() => <Redirect to={firstAccessibleRoute ? firstAccessibleRoute.layout + firstAccessibleRoute.path : "/auth/signin"} />}
+              key={key}
+            />
+          );
+        }
       } else {
         return null;
       }
     });
   };
+
   const { isOpen, onOpen, onClose } = useDisclosure();
   document.documentElement.dir = "ltr";
-  // Chakra Color Mode
+
+  if (loadingPermissions) {
+    return (
+      <Flex justify="center" align="center" h="100vh">
+        <Spinner size="xl" />
+      </Flex>
+    );
+  }
+
   return (
     <Box>
       <Box
@@ -128,7 +225,7 @@ export default function Dashboard(props) {
         top='0'
       />
       <Sidebar
-        routes={routes}
+        routes={accessibleRoutes} // Pass filtered routes to Sidebar
         logo={
           <Box display='flex' alignItems='center' justifyContent='center'>
             <img src={require("assets/img/logo.png")} alt="Dashboard Logo" style={{ height: '40px', width: 'auto' }} />
@@ -145,8 +242,8 @@ export default function Dashboard(props) {
         <Portal>
           <AdminNavbar
             onOpen={onOpen}
-            brandText={getActiveRoute(routes)}
-            secondary={getActiveNavbar(routes)}
+            brandText={getActiveRoute(accessibleRoutes)}
+            secondary={getActiveNavbar(accessibleRoutes)}
             fixed={fixed}
             {...rest}
           />
@@ -155,8 +252,8 @@ export default function Dashboard(props) {
           <PanelContent>
             <PanelContainer>
               <Switch>
-                {getRoutes(routes)}
-                <Redirect from='/admin' to='/admin/dashboard' />
+                {getRoutes(routes)} {/* Use original routes here for routing logic, but permission check inside getRoutes */}
+                {/* No default redirect here, handled by useEffect and getRoutes */}
               </Switch>
             </PanelContainer>
           </PanelContent>
@@ -164,13 +261,13 @@ export default function Dashboard(props) {
         <Footer />
         <Portal>
           <FixedPlugin
-            secondary={getActiveNavbar(routes)}
+            secondary={getActiveNavbar(accessibleRoutes)}
             fixed={fixed}
             onOpen={onOpen}
           />
         </Portal>
         <Configurator
-          secondary={getActiveNavbar(routes)}
+          secondary={getActiveNavbar(accessibleRoutes)}
           isOpen={isOpen}
           onClose={onClose}
           isChecked={fixed}

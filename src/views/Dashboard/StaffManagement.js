@@ -138,7 +138,15 @@ export default function StaffManagement() {
     {
       Header: "Permissions",
       accessor: "permissions",
-      Cell: ({ value }) => (value || []).join(", "),
+      Cell: ({ value }) => (
+        <Flex wrap="wrap" gap={1}>
+          {(value || []).map((permission, index) => (
+            <Tag size="sm" key={index} colorScheme="orange">
+              {permission.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </Tag>
+          ))}
+        </Flex>
+      ),
       Filter: () => null,
     },
     {
@@ -418,6 +426,7 @@ export default function StaffManagement() {
               <FormControl mb={3}>
                 <FormLabel>Permissions</FormLabel>
                 <VStack align="start">
+                  <Checkbox isChecked={form.permissions.includes("dashboard")} onChange={e => handlePermissionChange("dashboard", e.target.checked)}>Dashboard</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("staff-management")} onChange={e => handlePermissionChange("staff-management", e.target.checked)}>Staff Management</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("category-manager")} onChange={e => handlePermissionChange("category-manager", e.target.checked)}>Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("service-manager")} onChange={e => handlePermissionChange("service-manager", e.target.checked)}>Service Manager</Checkbox>

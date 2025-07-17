@@ -41,6 +41,7 @@ var dashRoutes = [
     icon: <HomeIcon color='inherit' />,
     component: Dashboard,
     layout: "/admin",
+    permission: "dashboard", // Assuming a general dashboard permission
   },
 
   {
@@ -52,6 +53,7 @@ var dashRoutes = [
     component: Profile,
     layout: "/admin",
     sidebar: false, // Hide from sidebar (including mobile)
+    permission: "profile", // Assuming a profile permission
   },
   // AUTH ROUTES
   {
@@ -78,6 +80,7 @@ var dashRoutes = [
     icon: <IoPeople color='inherit' />,
     component: StaffManagement,
     layout: "/admin",
+    permission: "staff-management",
   },
   {
     path: "/category-manager",
@@ -85,7 +88,7 @@ var dashRoutes = [
     icon: <IoDocumentOutline color='inherit' />,
     component: CategoryManager,
     layout: "/admin",
-    
+    permission: "category-manager",
   },
     {
     path: "/sub-category-manager",
@@ -93,6 +96,7 @@ var dashRoutes = [
     icon: <IoDocument color='inherit' />,
     component: SubCategoryManager,
     layout: "/admin",
+    permission: "sub-category-manager",
   },
   {
     path: "/service-manager",
@@ -100,6 +104,7 @@ var dashRoutes = [
     icon: <RocketIcon color='inherit' />,
     component: ServiceManager,
     layout: "/admin",
+    permission: "service-manager",
   },
   {
     path: "/product-library",
@@ -107,6 +112,7 @@ var dashRoutes = [
      icon: <IoCube color='inherit' />,
     component: ProductManager,
     layout: "/admin",
+    permission: "product-library",
   },
   {
     path: "/coupon-manager",
@@ -114,6 +120,7 @@ var dashRoutes = [
     icon: <CreditIcon color='inherit' />,
     component: CouponManager,
     layout: "/admin",
+    permission: "coupon-manager",
   },
   {
     path: "/discount-manager",
@@ -121,6 +128,7 @@ var dashRoutes = [
     icon: <FaPercentage color='inherit' />,
     component: DiscountManager,
     layout: "/admin",
+    permission: "discount-manager",
   },
   {
     path: "/worker-management",
@@ -128,6 +136,7 @@ var dashRoutes = [
     icon: <IoPeople color='inherit' />,
     component: require("views/Dashboard/WorkerManagement.js").default,
     layout: "/admin",
+    permission: "worker-management",
   },
 
   {
@@ -136,6 +145,7 @@ var dashRoutes = [
     icon: <FaBullhorn color='inherit' />,
     component: AdsManager,
     layout: "/admin",
+    permission: "ads-manager",
   },
 
 
@@ -145,6 +155,7 @@ var dashRoutes = [
     icon: <RiSpeaker3Line color='inherit' />,
     component: Feedback,
     layout: "/admin",
+    permission: "feedback",
   },
       {
     path: "/settings",
@@ -152,6 +163,7 @@ var dashRoutes = [
     icon: <SettingsIcon color='inherit' />,
     component: Settings,
     layout: "/admin",
+    permission: "settings",
   },
 ];
 export default dashRoutes;

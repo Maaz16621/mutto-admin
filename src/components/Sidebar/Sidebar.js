@@ -119,8 +119,6 @@ function Sidebar(props) {
   };
   const { logo, routes } = props;
 
-  console.log('Sidebar routes:', routes);
-
   var links = <>{createLinks(routes)}</>;
 
   // For mobile sidebar (Drawer), use the same links as desktop
@@ -226,7 +224,7 @@ export function SidebarResponsive(props) {
   // this function creates the links and collapses that appear in the sidebar (left menu)
   const createLinks = (routes) => {
     return routes.map((prop, key) => {
-      if (prop.redirect) {
+      if (prop.redirect || prop.sidebar === false) {
         return null;
       }
       if (prop.category) {
