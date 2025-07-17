@@ -315,7 +315,7 @@ export default function Dashboard() {
                         <Avatar src={worker.profilePic || ImageArchitect1} size="sm" mr="10px" />
                         <Box>
                           <Text fontWeight="bold">{worker.userName}</Text>
-                          <Text fontSize="sm">{worker.jobStatus || 'Resting'}</Text>
+                          <Text fontSize="sm">{worker.jobStatus || 'Idle'}</Text>
                         </Box>
                       </Flex>
                     </Card>
