@@ -297,7 +297,7 @@ export default function Dashboard() {
           <Card p='0px' maxW={{ sm: "320px", md: "100%" }}>
             <CardBody>
               <Box position="relative">
-                <MapContainer ref={mapRef} center={[25.2048, 55.2708]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
+                <MapContainer ref={mapRef} center={[24.3506, 53.9396]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
