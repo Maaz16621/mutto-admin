@@ -17,7 +17,8 @@
 */
 import React from "react";
 import ReactDOM from "react-dom";
-import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
+import { HashRouter, Route, Switch, Redirect } from "react-router-dom";
+
 
 import AuthLayout from "layouts/Auth.js";
 import AdminLayout from "layouts/Admin.js";
@@ -27,10 +28,19 @@ import { ChakraProvider } from "@chakra-ui/react";
 import theme from "theme/theme.js";
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import L from 'leaflet';
+
+delete L.Icon.Default.prototype._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+});
 
 ReactDOM.render(
   <ChakraProvider theme={theme} resetCss={false} position="relative">
-    <BrowserRouter>
+    <HashRouter>
       <Switch>
         {/* Main entry: if not logged in, show sign-in; if logged in, redirect handled in layouts */}
         <Route path="/auth" component={AuthLayout} />
@@ -38,7 +48,7 @@ ReactDOM.render(
         <Route path="/rtl" component={RTLLayout} />
         <Redirect exact from="/" to="/auth/signin" />
       </Switch>
-    </BrowserRouter>
+    </HashRouter>
   </ChakraProvider>,
   document.getElementById("root")
 );

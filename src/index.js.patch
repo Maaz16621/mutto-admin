@@ -1,0 +1,34 @@
+import ReactDOM from "react-dom";
+import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
+
+=======
+import React from "react";
+import ReactDOM from "react-dom";
+import { HashRouter, Route, Switch, Redirect } from "react-router-dom";
+
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+  <ChakraProvider theme={theme} resetCss={false} position="relative">
+    <BrowserRouter>
+      <Switch>
+        {/* Main entry: if not logged in, show sign-in; if logged in, redirect handled in layouts */}
+        <Route path="/auth" component={AuthLayout} />
+        <Route path="/admin" component={AdminLayout} />
+        <Route path="/rtl" component={RTLLayout} />
+        <Redirect exact from="/" to="/auth/signin" />
+      </Switch>
+    </BrowserRouter>
+  </ChakraProvider>,
+=======
+  <ChakraProvider theme={theme} resetCss={false} position="relative">
+    <HashRouter>
+      <Switch>
+        {/* Main entry: if not logged in, show sign-in; if logged in, redirect handled in layouts */}
+        <Route path="/auth" component={AuthLayout} />
+        <Route path="/admin" component={AdminLayout} />
+        <Route path="/rtl" component={RTLLayout} />
+        <Redirect exact from="/" to="/auth/signin" />
+      </Switch>
+    </HashRouter>
+  </ChakraProvider>,

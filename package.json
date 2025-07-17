@@ -2,6 +2,7 @@
 	"name": "mutto-admin-panel",
 	"version": "1.0.3",
 	"private": true,
+	"homepage": "https://Maaz16621.github.io/mutto-admin",
 	"dependencies": {
 		"@chakra-ui/icons": "^1.1.5",
 		"@chakra-ui/react": "1.8.8",
@@ -56,7 +57,8 @@
 		"build": "cross-env CI=false;cross-env PUBLIC_URL=/ react-scripts build && gulp licenses",
 		"test": "react-scripts test --env=jsdom",
 		"eject": "react-scripts eject",
-		"deploy": "npm run build",
+		"predeploy": "npm run build",
+		"deploy": "gh-pages -d build",
 		"lint:check": "eslint . --ext=js,jsx;  exit 0",
 		"lint:fix": "eslint . --ext=js,jsx --fix;  exit 0",
 		"install:clean": "rm -rf node_modules/ && rm -rf package-lock.json && npm install && npm start"
@@ -72,7 +74,8 @@
 		"eslint-plugin-prettier": "3.4.0",
 		"gulp": "4.0.2",
 		"gulp-append-prepend": "1.0.9",
-		"prettier": "2.2.1"
+		"prettier": "2.2.1",
+		"gh-pages": "^5.0.0"
 	},
 	"browserslist": {
 		"production": [

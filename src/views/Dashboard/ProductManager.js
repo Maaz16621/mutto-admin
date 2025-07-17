@@ -40,7 +40,8 @@ import {
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useSortBy, usePagination } from "react-table";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
-import { firestore } from "../../firebase";
+import { firestore, storage } from "../../firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
@@ -54,8 +55,12 @@ export default function ProductManager() {
     name: "",
     cost: "",
     time: "",
-    assignedServices: []
+    assignedServices: [],
+    imageUrl: "",
   });
+  const [productImageFile, setProductImageFile] = useState(null);
+  const [productImagePreview, setProductImagePreview] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
@@ -96,14 +101,34 @@ export default function ProductManager() {
       return;
     }
     setLoading(true);
-    const data = {
-      name: form.name,
-      cost: Number(form.cost),
-      time: Number(form.time),
-      assignedServices: form.assignedServices,
-      updatedAt: serverTimestamp(),
-    };
+    let imageUrl = form.imageUrl;
     try {
+      if (productImageFile) {
+        const fileExt = productImageFile.name.split('.').pop();
+        const fileName = `product-images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        const storageRef = ref(storage, fileName);
+        const uploadTask = uploadBytesResumable(storageRef, productImageFile);
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              setUploadProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+            },
+            (error) => reject(error),
+            async () => {
+              imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
+      }
+      const data = {
+        name: form.name,
+        cost: Number(form.cost),
+        time: Number(form.time),
+        assignedServices: form.assignedServices,
+        imageUrl: imageUrl || "",
+        updatedAt: serverTimestamp(),
+      };
       if (selectedProduct) {
         await updateDoc(doc(firestore, "products", selectedProduct.id), data);
         toast({ title: "Product updated" });
@@ -116,9 +141,12 @@ export default function ProductManager() {
       }
       fetchProducts();
       onClose();
-      setForm({ name: "", cost: "", time: "", assignedServices: [] });
+      setForm({ name: "", cost: "", time: "", assignedServices: [], imageUrl: "" });
       setSelectedProduct(null);
       setServiceInput("");
+      setProductImageFile(null);
+      setProductImagePreview("");
+      setUploadProgress(0);
     } catch (err) {
       toast({ title: "Error saving product", status: "error", description: err.message });
     }
@@ -133,10 +161,14 @@ export default function ProductManager() {
           name: product.name || "",
           cost: product.cost || "",
           time: product.time || "",
-          assignedServices: product.assignedServices || []
+          assignedServices: product.assignedServices || [],
+          imageUrl: product.imageUrl || "",
         }
       : { name: "", cost: "", time: "", assignedServices: [] }
     );
+    setProductImageFile(null);
+    setProductImagePreview(product && product.imageUrl ? product.imageUrl : "");
+    setUploadProgress(0);
     setServiceInput("");
     onOpen();
   };
@@ -171,6 +203,12 @@ export default function ProductManager() {
 
   // Table columns
   const columns = useMemo(() => [
+    {
+      Header: "Image",
+      accessor: "imageUrl",
+      Cell: ({ value }) => value ? <img src={value} alt="product" style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 6 }} /> : "-",
+      disableSortBy: true,
+    },
     { Header: "Name", accessor: "name" },
     { Header: "Cost", accessor: "cost" },
     { Header: "Time (min)", accessor: "time" },
@@ -359,6 +397,35 @@ export default function ProductManager() {
               )}
               <Box>
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                  <FormControl mb={3}>
+                    <FormLabel>Product Image</FormLabel>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setProductImageFile(file);
+                          setProductImagePreview(URL.createObjectURL(file));
+                        } else {
+                          setProductImageFile(null);
+                          setProductImagePreview(form.imageUrl || "");
+                        }
+                      }}
+                    />
+                    {(productImagePreview || form.imageUrl) && (
+                      <Box mt={2}>
+                        <img
+                          src={productImagePreview || form.imageUrl}
+                          alt="Product Preview"
+                          style={{ maxWidth: "100px", maxHeight: "100px", borderRadius: 8, border: "1px solid #eee" }}
+                        />
+                      </Box>
+                    )}
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                      <Box mt={1} fontSize="sm" color="gray.500">Uploading: {uploadProgress}%</Box>
+                    )}
+                  </FormControl>
                   <FormControl mb={3} isRequired>
                     <FormLabel display="flex" alignItems="center" gap={1}>
                       Product Name
