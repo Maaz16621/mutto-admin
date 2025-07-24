@@ -12,7 +12,6 @@ import { Portal, useDisclosure, Box, useColorMode, Spinner, Flex } from "@chakra
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "../firebase"; // Adjust path as needed
 
-import Configurator from "components/Configurator/Configurator";
 import Footer from "components/Footer/Footer.js";
 import AdminNavbar from "components/Navbars/AdminNavbar.js";
 import Sidebar from "components/Sidebar/Sidebar.js";
@@ -234,13 +233,7 @@ export default function Dashboard(props) {
           </PanelContent>
         ) : null}
         <Footer />
-        <Portal>
-          <FixedPlugin
-            secondary={getActiveNavbar(accessibleRoutes)}
-            fixed={fixed}
-            onOpen={onOpen}
-          />
-        </Portal>
+     
         
       </MainPanel>
     </Box>
