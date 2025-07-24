@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Switch, Tag, TagLabel, TagCloseButton, SimpleGrid, VStack, Menu, MenuButton, MenuList, MenuItem } from "@chakra-ui/react";
+import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Switch, Tag, TagLabel, TagCloseButton, SimpleGrid, VStack, Menu, MenuButton, MenuList, MenuItem, Checkbox, Text } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
 import { SearchIcon } from "@chakra-ui/icons";
-import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";
 import { firestore } from "../../firebase";
@@ -37,6 +37,8 @@ export default function WorkerManagement() {
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [selectedWorkerForArea, setSelectedWorkerForArea] = useState(null);
   const [serviceArea, setServiceArea] = useState(null);
+  const [companySettings, setCompanySettings] = useState(null);
+  const [newOffDate, setNewOffDate] = useState("");
 
   const openLocationModal = (worker) => {
     setSelectedWorkerForLocation(worker);
@@ -125,6 +127,31 @@ export default function WorkerManagement() {
     setServiceArea(null);
   };
 
+  const handleAddOffDate = () => {
+    if (newOffDate && !form.offDates.includes(newOffDate)) {
+      setForm(f => ({ ...f, offDates: [...f.offDates, newOffDate] }));
+      setNewOffDate("");
+    }
+  };
+
+  const handleRemoveOffDate = (dateToRemove) => {
+    setForm(f => ({ ...f, offDates: f.offDates.filter(date => date !== dateToRemove) }));
+  };
+
+  const fetchCompanySettings = async () => {
+    try {
+      const settingsDocRef = doc(firestore, "settings", "appSettings");
+      const docSnap = await getDoc(settingsDocRef);
+      if (docSnap.exists()) {
+        setCompanySettings(docSnap.data());
+      } else {
+        toast({ title: "Company settings not found", status: "warning" });
+      }
+    } catch (err) {
+      toast({ title: "Error fetching company settings", status: "error", description: err.message });
+    }
+  };
+
   // Fetch workers
   const fetchWorkers = async () => {
     setLoading(true);
@@ -152,6 +179,7 @@ export default function WorkerManagement() {
   useEffect(() => {
     fetchWorkers();
     fetchServices();
+    fetchCompanySettings();
   }, []);
 
   // Add or update worker
@@ -179,6 +207,8 @@ export default function WorkerManagement() {
           assignedServices: form.assignedServices,
           autoAccept: form.autoAccept,
           status: form.status,
+          dailyWorkingHours: form.dailyWorkingHours,
+          offDates: form.offDates,
           lastLogin: null,
           createdAt: serverTimestamp(),
         });
@@ -186,7 +216,8 @@ export default function WorkerManagement() {
       }
       fetchWorkers();
       onClose();
-      setForm({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active" });
+      const defaultHours = companySettings?.dailyWorkingHours || {};
+      setForm({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active", dailyWorkingHours: defaultHours, offDates: [] });
       setSelectedWorker(null);
     } catch (err) {
       toast({ title: "Error saving worker", status: "error", description: err.message, position: "top-right" });
@@ -197,6 +228,9 @@ export default function WorkerManagement() {
   // Open modal for add/edit
   const openEdit = (worker) => {
     setSelectedWorker(worker);
+
+    const defaultHours = companySettings?.dailyWorkingHours || {};
+
     setForm(worker
       ? {
           userName: worker.userName || "",
@@ -206,8 +240,20 @@ export default function WorkerManagement() {
           assignedServices: worker.assignedServices || [],
           autoAccept: worker.autoAccept || false,
           status: worker.status || "active",
+          dailyWorkingHours: worker.dailyWorkingHours || defaultHours,
+          offDates: worker.offDates || [],
         }
-      : { userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active" }
+      : { 
+          userName: "", 
+          email: "", 
+          password: "", 
+          phoneNumber: "", 
+          assignedServices: [], 
+          autoAccept: false, 
+          status: "active", 
+          dailyWorkingHours: defaultHours, 
+          offDates: [] 
+        }
     );
     onOpen();
   };
@@ -493,6 +539,104 @@ export default function WorkerManagement() {
                 <FormControl display="flex" alignItems="center"><FormLabel htmlFor="autoAccept" mb="0">Auto Accept</FormLabel><Switch id="autoAccept" isChecked={form.autoAccept} onChange={e => setForm(f => ({ ...f, autoAccept: e.target.checked }))} /></FormControl>
                 <FormControl><FormLabel>Status</FormLabel><Select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}><option value="active">Active</option><option value="suspended">Suspended</option></Select></FormControl>
               </SimpleGrid>
+              <Heading size="md" mt={6} mb={4}>Working Hours</Heading>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                {Object.entries(form.dailyWorkingHours).map(([day, hours]) => {
+                  const companyDay = companySettings?.dailyWorkingHours?.[day];
+
+                  const timeToMinutes = (timeStr) => {
+                    if (!timeStr) return 0;
+                    const [h, m] = timeStr.split(':').map(Number);
+                    return h * 60 + m;
+                  };
+
+                  return (
+                    <FormControl key={day} display="flex" alignItems="center">
+                      <FormLabel htmlFor={day} mb="0" minW="90px" textTransform="capitalize">
+                        {day}
+                      </FormLabel>
+                      <Input
+                        type="time"
+                        id={day}
+                        value={hours.start}
+                        onChange={(e) => {
+                          let newStart = e.target.value;
+                          const companyStartTime = companyDay?.start;
+                          const workerEndTime = hours.end;
+
+                          if (companyStartTime && timeToMinutes(newStart) < timeToMinutes(companyStartTime)) {
+                            newStart = companyStartTime;
+                            toast({ title: `Start time cannot be earlier than company's opening time (${newStart})`, status: "warning", duration: 3000, isClosable: true });
+                          } else if (workerEndTime && timeToMinutes(newStart) > timeToMinutes(workerEndTime)) {
+                            newStart = workerEndTime;
+                            toast({ title: `Start time cannot be after the end time`, status: "warning", duration: 3000, isClosable: true });
+                          }
+
+                          const newHours = { ...form.dailyWorkingHours, [day]: { ...hours, start: newStart } };
+                          setForm({ ...form, dailyWorkingHours: newHours });
+                        }}
+                        isDisabled={!hours.enabled || !companyDay?.enabled}
+                        mr={2}
+                      />
+                      <Text mr={2}>-</Text>
+                      <Input
+                        type="time"
+                        value={hours.end}
+                        onChange={(e) => {
+                          let newEnd = e.target.value;
+                          const companyEndTime = companyDay?.end;
+                          const workerStartTime = hours.start;
+
+                          if (companyEndTime && timeToMinutes(newEnd) > timeToMinutes(companyEndTime)) {
+                            newEnd = companyEndTime;
+                            toast({ title: `End time cannot be later than company's closing time (${newEnd})`, status: "warning", duration: 3000, isClosable: true });
+                          } else if (workerStartTime && timeToMinutes(newEnd) < timeToMinutes(workerStartTime)) {
+                            newEnd = workerStartTime;
+                            toast({ title: `End time cannot be before the start time`, status: "warning", duration: 3000, isClosable: true });
+                          }
+
+                          const newHours = { ...form.dailyWorkingHours, [day]: { ...hours, end: newEnd } };
+                          setForm({ ...form, dailyWorkingHours: newHours });
+                        }}
+                        isDisabled={!hours.enabled || !companyDay?.enabled}
+                        mr={2}
+                      />
+                      <Checkbox
+                        isChecked={hours.enabled}
+                        onChange={(e) => {
+                          const newHours = { ...form.dailyWorkingHours, [day]: { ...hours, enabled: e.target.checked } };
+                          setForm({ ...form, dailyWorkingHours: newHours });
+                        }}
+                        isDisabled={!companyDay?.enabled}
+                      />
+                    </FormControl>
+                  );
+                })}
+              </SimpleGrid>
+              <Heading size="md" mt={6} mb={4}>Days Off</Heading>
+              <FormControl>
+                <FormLabel>Add Specific Off Date</FormLabel>
+                <Flex>
+                  <Input
+                    type="date"
+                    value={newOffDate}
+                    onChange={(e) => setNewOffDate(e.target.value)}
+                    mr={2}
+                  />
+                  <Button onClick={handleAddOffDate} colorScheme="orange">Add</Button>
+                </Flex>
+              </FormControl>
+              <Box mt={4}>
+                <FormLabel>Current Off Dates</FormLabel>
+                <Flex wrap="wrap" gap={2}>
+                  {form.offDates.map((date) => (
+                    <Tag size="md" key={date} borderRadius="full" variant="solid" colorScheme="red">
+                      <TagLabel>{date}</TagLabel>
+                      <TagCloseButton onClick={() => handleRemoveOffDate(date)} />
+                    </Tag>
+                  ))}
+                </Flex>
+              </Box>
             </ModalBody>
             <ModalFooter>
               <Button colorScheme="orange" mr={3} onClick={handleSave} isLoading={loading}>Save</Button>

@@ -15,6 +15,7 @@ import CardBody from "components/Card/CardBody";
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:5001' : 'https://api.yourdomain.com';
 export default function StaffManagement() {
+  console.log("StaffManagement component rendering...");
   const [deleteModal, setDeleteModal] = useState({ open: false, staff: null });
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,15 +41,19 @@ export default function StaffManagement() {
 
   // Fetch staff (excluding admin)
   const fetchStaff = async () => {
+    console.log("fetchStaff called.");
     setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(firestore, "staff"));
       const staffList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setStaff(staffList);
+      console.log("Staff fetched successfully:", staffList);
     } catch (err) {
+      console.error("Error fetching staff:", err);
       toast({ title: "Error fetching staff", status: "error", description: err.message });
     }
     setLoading(false);
+    console.log("Loading set to false.");
   };
 
   useEffect(() => {

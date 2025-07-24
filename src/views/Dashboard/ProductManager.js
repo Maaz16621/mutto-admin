@@ -50,6 +50,8 @@ import { SimpleGrid } from "@chakra-ui/react";
 export default function ProductManager() {
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [subCategories, setSubCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
@@ -57,6 +59,8 @@ export default function ProductManager() {
     time: "",
     assignedServices: [],
     imageUrl: "",
+    categoryId: "",
+    subCategoryId: "",
   });
   const [productImageFile, setProductImageFile] = useState(null);
   const [productImagePreview, setProductImagePreview] = useState("");
@@ -89,9 +93,31 @@ export default function ProductManager() {
     setLoading(false);
   };
 
+  // Fetch product categories
+  const fetchCategories = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(firestore, "product_category"));
+      setCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      toast({ title: "Error fetching product categories", status: "error", description: err.message });
+    }
+  };
+
+  // Fetch product sub-categories
+  const fetchSubCategories = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(firestore, "product_subcategory"));
+      setSubCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      toast({ title: "Error fetching product sub-categories", status: "error", description: err.message });
+    }
+  };
+
   useEffect(() => {
     fetchServices();
     fetchProducts();
+    fetchCategories();
+    fetchSubCategories();
   }, []);
 
   // Add or update product
@@ -127,6 +153,8 @@ export default function ProductManager() {
         time: Number(form.time),
         assignedServices: form.assignedServices,
         imageUrl: imageUrl || "",
+        categoryId: form.categoryId || "",
+        subCategoryId: form.subCategoryId || "",
         updatedAt: serverTimestamp(),
       };
       if (selectedProduct) {
@@ -141,7 +169,7 @@ export default function ProductManager() {
       }
       fetchProducts();
       onClose();
-      setForm({ name: "", cost: "", time: "", assignedServices: [], imageUrl: "" });
+      setForm({ name: "", cost: "", time: "", assignedServices: [], imageUrl: "", categoryId: "", subCategoryId: "" });
       setSelectedProduct(null);
       setServiceInput("");
       setProductImageFile(null);
@@ -163,8 +191,10 @@ export default function ProductManager() {
           time: product.time || "",
           assignedServices: product.assignedServices || [],
           imageUrl: product.imageUrl || "",
+          categoryId: product.categoryId || "",
+          subCategoryId: product.subCategoryId || "",
         }
-      : { name: "", cost: "", time: "", assignedServices: [] }
+      : { name: "", cost: "", time: "", assignedServices: [], categoryId: "", subCategoryId: "" }
     );
     setProductImageFile(null);
     setProductImagePreview(product && product.imageUrl ? product.imageUrl : "");
@@ -210,6 +240,16 @@ export default function ProductManager() {
       disableSortBy: true,
     },
     { Header: "Name", accessor: "name" },
+    {
+      Header: "Category",
+      accessor: "categoryId",
+      Cell: ({ value }) => categories.find(cat => cat.id === value)?.name || "-",
+    },
+    {
+      Header: "Sub-Category",
+      accessor: "subCategoryId",
+      Cell: ({ value }) => subCategories.find(subCat => subCat.id === value)?.name || "-",
+    },
     { Header: "Cost", accessor: "cost" },
     { Header: "Time (min)", accessor: "time" },
     {
@@ -249,6 +289,8 @@ export default function ProductManager() {
       (p.name && p.name.toLowerCase().includes(q)) ||
       (p.cost && String(p.cost).includes(q)) ||
       (p.time && String(p.time).includes(q)) ||
+      (p.categoryId && categories.find(cat => cat.id === p.categoryId)?.name.toLowerCase().includes(q)) ||
+      (p.subCategoryId && subCategories.find(subCat => subCat.id === p.subCategoryId)?.name.toLowerCase().includes(q)) ||
       (p.assignedServices && p.assignedServices.some(id => {
         const s = services.find(sv => sv.id === id);
         return s && s.name && s.name.toLowerCase().includes(q);
@@ -434,6 +476,24 @@ export default function ProductManager() {
                       </Tooltip>
                     </FormLabel>
                     <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                  </FormControl>
+                  <FormControl mb={3} isRequired>
+                    <FormLabel>Category</FormLabel>
+                    <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value, subCategoryId: "" }))}>
+                      <option value="">Select Category</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl mb={3}>
+                    <FormLabel>Sub-Category</FormLabel>
+                    <Select value={form.subCategoryId} onChange={e => setForm(f => ({ ...f, subCategoryId: e.target.value }))} isDisabled={!form.categoryId}>
+                      <option value="">Select Sub-Category</option>
+                      {subCategories.filter(subCat => subCat.mainCategoryId === form.categoryId).map(subCat => (
+                        <option key={subCat.id} value={subCat.id}>{subCat.name}</option>
+                      ))}
+                    </Select>
                   </FormControl>
                   <FormControl mb={3} isRequired>
                     <FormLabel display="flex" alignItems="center" gap={1}>
