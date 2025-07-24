@@ -443,6 +443,8 @@ export default function StaffManagement() {
                   <Checkbox isChecked={form.permissions.includes("ads-manager")} onChange={e => handlePermissionChange("ads-manager", e.target.checked)}>Ads Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("settings")} onChange={e => handlePermissionChange("settings", e.target.checked)}>Settings</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("sub-category-manager")} onChange={e => handlePermissionChange("sub-category-manager", e.target.checked)}>Sub-Category Manager</Checkbox>
+                  <Checkbox isChecked={form.permissions.includes("product-category-manager")} onChange={e => handlePermissionChange("product-category-manager", e.target.checked)}>Product Category Manager</Checkbox>
+                  <Checkbox isChecked={form.permissions.includes("product-sub-category-manager")} onChange={e => handlePermissionChange("product-sub-category-manager", e.target.checked)}>Product Sub-Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("feedback")} onChange={e => handlePermissionChange("feedback", e.target.checked)}>Feedback</Checkbox>
                 </VStack>
               </FormControl>

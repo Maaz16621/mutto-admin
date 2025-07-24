@@ -96,7 +96,7 @@ export default function ProductManager() {
   // Fetch product categories
   const fetchCategories = async () => {
     try {
-      const querySnapshot = await getDocs(collection(firestore, "product_category"));
+      const querySnapshot = await getDocs(collection(firestore, "product_categories"));
       setCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       toast({ title: "Error fetching product categories", status: "error", description: err.message });
@@ -106,7 +106,7 @@ export default function ProductManager() {
   // Fetch product sub-categories
   const fetchSubCategories = async () => {
     try {
-      const querySnapshot = await getDocs(collection(firestore, "product_subcategory"));
+      const querySnapshot = await getDocs(collection(firestore, "product_subcategories"));
       setSubCategories(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       toast({ title: "Error fetching product sub-categories", status: "error", description: err.message });

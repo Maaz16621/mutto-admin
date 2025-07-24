@@ -10,6 +10,8 @@ import StaffManagement from "views/Dashboard/StaffManagement.js";
 import CategoryManager from "views/Dashboard/CategoryManager.js";
 import ServiceManager from "views/Dashboard/ServiceManager.js";
 import ProductManager from "views/Dashboard/ProductManager.js";
+import ProductCategoryManager from "views/Dashboard/ProductCategoryManager.js";
+import ProductSubCategoryManager from "views/Dashboard/ProductSubCategoryManager.js";
 import CouponManager from "views/Dashboard/CouponManager.js";
 import DiscountManager from "views/Dashboard/DiscountManager.js";
 import Settings from "views/Dashboard/Settings.js"; // Import the new Settings component
@@ -109,10 +111,26 @@ var dashRoutes = [
   {
     path: "/product-library",
     name: "Addon Products",
-     icon: <IoCube color='inherit' />,
+    icon: <IoCube color='inherit' />,
     component: ProductManager,
     layout: "/admin",
     permission: "product-library",
+  },
+  {
+    path: "/product-category-manager",
+    name: "Product Categories",
+    icon: <IoDocumentOutline color='inherit' />,
+    component: ProductCategoryManager,
+    layout: "/admin",
+    permission: "product-category-manager",
+  },
+  {
+    path: "/product-sub-category-manager",
+    name: "Product Sub-Categories",
+    icon: <IoDocument color='inherit' />,
+    component: ProductSubCategoryManager,
+    layout: "/admin",
+    permission: "product-sub-category-manager",
   },
   {
     path: "/coupon-manager",

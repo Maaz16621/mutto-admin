@@ -9,6 +9,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
+
 export default function ProductSubCategoryManager() {
   const [deleteModal, setDeleteModal] = useState({ open: false, subCategory: null });
   const [subCategories, setSubCategories] = useState([]);
@@ -23,7 +24,7 @@ export default function ProductSubCategoryManager() {
 
   const fetchCategories = async () => {
     try {
-      const q = query(collection(firestore, "product_category"));
+      const q = query(collection(firestore, "product_categories"));
       const querySnapshot = await getDocs(q);
       const categoryList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setCategories(categoryList);
@@ -35,7 +36,7 @@ export default function ProductSubCategoryManager() {
   const fetchSubCategories = async () => {
     setLoading(true);
     try {
-      const q = query(collection(firestore, "product_subcategory"));
+      const q = query(collection(firestore, "product_subcategories"));
       const querySnapshot = await getDocs(q);
       const subCategoryList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSubCategories(subCategoryList);
@@ -52,7 +53,7 @@ export default function ProductSubCategoryManager() {
 
   const handleSave = async () => {
     if (!form.name || !form.mainCategoryId) {
-      toast({ title: "Sub-category name and main category are required", status: "warning", position: "top-right" });
+      toast({ title: "Product Sub-category name and main category are required", status: "warning", position: "top-right" });
       return;
     }
     setLoading(true);
@@ -77,20 +78,20 @@ export default function ProductSubCategoryManager() {
         }
       }
       if (selectedSubCategory) {
-        await updateDoc(doc(firestore, "product_subcategory", selectedSubCategory.id), {
+        await updateDoc(doc(firestore, "product_subcategories", selectedSubCategory.id), {
           name: form.name,
           mainCategoryId: form.mainCategoryId,
           iconUrl,
         });
-        toast({ title: "Product sub-category updated", position: "top-right" });
+        toast({ title: "Product Sub-category updated", position: "top-right" });
       } else {
-        await setDoc(doc(collection(firestore, "product_subcategory")), {
+        await setDoc(doc(collection(firestore, "product_subcategories")), {
           name: form.name,
           mainCategoryId: form.mainCategoryId,
           iconUrl,
           createdAt: serverTimestamp(),
         });
-        toast({ title: "Product sub-category added", position: "top-right" });
+        toast({ title: "Product Sub-category added", position: "top-right" });
       }
       fetchSubCategories();
       onClose();
@@ -177,8 +178,8 @@ export default function ProductSubCategoryManager() {
           toast({ title: "Warning", description: "Could not delete icon from storage.", status: "warning", position: "top-right" });
         }
       }
-      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "product_subcategory", subCategory.id)));
-      toast({ title: "Product sub-category deleted", status: "success", position: "top-right" });
+      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "product_subcategories", subCategory.id)));
+      toast({ title: "Product Sub-category deleted", status: "success", position: "top-right" });
       fetchSubCategories();
     } catch (err) {
       toast({ title: "Error deleting product sub-category", description: err.message, status: "error", position: "top-right" });
@@ -198,7 +199,7 @@ export default function ProductSubCategoryManager() {
     return data;
   }, [subCategories, globalFilter]);
 
-  const { 
+  const {
     getTableProps,
     getTableBodyProps,
     headerGroups,
@@ -237,7 +238,7 @@ export default function ProductSubCategoryManager() {
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
             <Heading size="md">Product Sub-Category Manager</Heading>
-            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Sub-Category</Button>
+            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Product Sub-Category</Button>
           </Flex>
         </CardHeader>
         <CardBody>
@@ -324,9 +325,9 @@ export default function ProductSubCategoryManager() {
               </Flex>
             )}
             <FormControl mb={3} isRequired>
-              <FormLabel>Main Category</FormLabel>
+              <FormLabel>Main Product Category</FormLabel>
               <Select value={form.mainCategoryId} onChange={e => setForm(f => ({ ...f, mainCategoryId: e.target.value }))}>
-                <option value="">Select Main Category</option>
+                <option value="">Select Main Product Category</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
@@ -362,7 +363,7 @@ export default function ProductSubCategoryManager() {
           <ModalHeader>Delete Product Sub-Category</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            Are you sure you want to delete sub-category <b>{deleteModal.subCategory?.name}</b>? This cannot be undone.
+            Are you sure you want to delete product sub-category <b>{deleteModal.subCategory?.name}</b>? This cannot be undone.
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="red" mr={3} onClick={handleDelete} isLoading={loading} loadingText="Deleting...">Delete</Button>

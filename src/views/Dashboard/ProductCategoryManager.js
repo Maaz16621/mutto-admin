@@ -9,6 +9,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
+
 export default function ProductCategoryManager() {
   const [deleteModal, setDeleteModal] = useState({ open: false, category: null });
   const [categories, setCategories] = useState([]);
@@ -24,7 +25,7 @@ export default function ProductCategoryManager() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const q = query(collection(firestore, "product_category"));
+      const q = query(collection(firestore, "product_categories"));
       const querySnapshot = await getDocs(q);
       const categoryList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setCategories(categoryList);
@@ -67,21 +68,21 @@ export default function ProductCategoryManager() {
       }
       if (selectedCategory) {
         // Edit category
-        await updateDoc(doc(firestore, "product_category", selectedCategory.id), {
+        await updateDoc(doc(firestore, "product_categories", selectedCategory.id), {
           name: form.name,
           description: form.description,
           iconUrl,
         });
-        toast({ title: "Product category updated", position: "top-right" });
+        toast({ title: "Product Category updated", position: "top-right" });
       } else {
         // Add category with Firestore auto-generated unique ID
-        const docRef = await setDoc(doc(collection(firestore, "product_category")), {
+        const docRef = await setDoc(doc(collection(firestore, "product_categories")), {
           name: form.name,
           description: form.description,
           iconUrl,
           createdAt: serverTimestamp(),
         });
-        toast({ title: "Product category added", position: "top-right" });
+        toast({ title: "Product Category added", position: "top-right" });
       }
       fetchCategories();
       onClose();
@@ -173,8 +174,8 @@ export default function ProductCategoryManager() {
         }
       }
       // Delete Firestore doc
-      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "product_category", category.id)));
-      toast({ title: "Product category deleted", status: "success", position: "top-right" });
+      await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "product_categories", category.id)));
+      toast({ title: "Product Category deleted", status: "success", position: "top-right" });
       fetchCategories();
     } catch (err) {
       toast({ title: "Error deleting product category", description: err.message, status: "error", position: "top-right" });
@@ -237,7 +238,7 @@ export default function ProductCategoryManager() {
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
             <Heading size="md">Product Category Manager</Heading>
-            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Category</Button>
+            <Button colorScheme="orange" onClick={() => openEdit(null)}>Add Product Category</Button>
           </Flex>
         </CardHeader>
         <CardBody>
@@ -328,7 +329,7 @@ export default function ProductCategoryManager() {
             <FormControl mb={3} isRequired>
               <FormLabel display="flex" alignItems="center" gap={1}>
                 Name
-                <Tooltip label="The name of the category (e.g., Wax, Polish)." placement="right" hasArrow>
+                <Tooltip label="The name of the product category (e.g., Interior, Exterior)." placement="right" hasArrow>
                   <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
                 </Tooltip>
               </FormLabel>
@@ -337,7 +338,7 @@ export default function ProductCategoryManager() {
             <FormControl mb={3}>
               <FormLabel display="flex" alignItems="center" gap={1}>
                 Description
-                <Tooltip label="A short description of the category." placement="right" hasArrow>
+                <Tooltip label="A short description of the product category." placement="right" hasArrow>
                   <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
                 </Tooltip>
               </FormLabel>
@@ -346,7 +347,7 @@ export default function ProductCategoryManager() {
             <FormControl mb={3}>
               <FormLabel display="flex" alignItems="center" gap={1}>
                 Icon Image
-                <Tooltip label="Upload an icon image for this category (optional)." placement="right" hasArrow>
+                <Tooltip label="Upload an icon image for this product category (optional)." placement="right" hasArrow>
                   <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
                 </Tooltip>
               </FormLabel>
@@ -374,7 +375,7 @@ export default function ProductCategoryManager() {
           <ModalHeader>Delete Product Category</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            Are you sure you want to delete category <b>{deleteModal.category?.name}</b>? This cannot be undone.
+            Are you sure you want to delete product category <b>{deleteModal.category?.name}</b>? This cannot be undone.
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="red" mr={3} onClick={handleDelete} isLoading={loading} loadingText="Deleting...">Delete</Button>
