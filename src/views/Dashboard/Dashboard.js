@@ -37,8 +37,8 @@ import {
 } from "components/Icons/Icons.js";
 import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, query } from "firebase/firestore";
-import { firestore } from "../../firebase";
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { firestore } from  "../../firebase";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import ImageArchitect1 from "assets/img/ImageArchitect1.png";
@@ -297,7 +297,7 @@ export default function Dashboard() {
           <Card p='0px' maxW={{ sm: "320px", md: "100%" }}>
             <CardBody>
               <Box position="relative">
-                <MapContainer ref={mapRef} center={[24.3506, 53.9396]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
+                <MapContainer center={[24.3506, 53.9396]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
