@@ -31,7 +31,7 @@ import {
   SettingsIcon, // Import SettingsIcon
   
 } from "components/Icons/Icons";
-import {  IoCube, IoDocument, IoDocumentOutline, IoPeople } from 'react-icons/io5';
+import {  IoCube, IoDocument, IoDocumentOutline, IoPeople, IoChatbubbles, IoDocumentText, IoBuild, IoTicket, IoLogIn, IoKey, IoConstruct, IoLayers, IoLayersOutline, IoFolder, IoFolderOpen, IoChatboxEllipses } from 'react-icons/io5';
 import { FaBullhorn, FaPercentage } from 'react-icons/fa';
 import { RiSpeaker3Line } from 'react-icons/ri';
 
@@ -40,6 +40,7 @@ var dashRoutes = [
   {
     path: "/dashboard",
     name: "Dashboard",
+    category: "Main",
     // rtlName removed
     icon: <HomeIcon color='inherit' />,
     component: Dashboard,
@@ -50,6 +51,7 @@ var dashRoutes = [
   {
     path: "/profile",
     name: "Profile",
+    category: "Main",
     // rtlName removed
     icon: <PersonIcon color='inherit' />,
     secondaryNavbar: true,
@@ -62,8 +64,9 @@ var dashRoutes = [
   {
     path: "/signin",
     name: "Sign In",
+    category: "Auth",
     // rtlName removed
-    icon: <PersonIcon color='inherit' />,
+    icon: <IoLogIn color='inherit' />,
     component: SignIn,
     layout: "/auth",
     sidebar: false, // Hide from sidebar
@@ -71,7 +74,8 @@ var dashRoutes = [
   {
     path: "/reset-password",
     name: "Reset Password",
-    icon: <PersonIcon color='inherit' />,
+    category: "Auth",
+    icon: <IoKey color='inherit' />,
     component: ResetPassword,
     layout: "/auth",
     sidebar: false, // Hide from sidebar
@@ -79,6 +83,7 @@ var dashRoutes = [
     {
     path: "/staff-management",
     name: "Staff Management",
+    category: "User Management",
     // rtlName removed
     icon: <IoPeople color='inherit' />,
     component: StaffManagement,
@@ -88,7 +93,8 @@ var dashRoutes = [
   {
     path: "/category-manager",
     name: "Category Manager",
-    icon: <IoDocumentOutline color='inherit' />,
+    category: "Product Management",
+    icon: <IoLayers color='inherit' />,
     component: CategoryManager,
     layout: "/admin",
     permission: "category-manager",
@@ -96,7 +102,8 @@ var dashRoutes = [
     {
     path: "/sub-category-manager",
     name: "Sub-Category Manager",
-    icon: <IoDocument color='inherit' />,
+    category: "Product Management",
+    icon: <IoLayersOutline color='inherit' />,
     component: SubCategoryManager,
     layout: "/admin",
     permission: "sub-category-manager",
@@ -104,7 +111,8 @@ var dashRoutes = [
   {
     path: "/service-manager",
     name: "Service Manager",
-    icon: <RocketIcon color='inherit' />,
+    category: "Service Management",
+    icon: <IoBuild color='inherit' />,
     component: ServiceManager,
     layout: "/admin",
     permission: "service-manager",
@@ -112,6 +120,7 @@ var dashRoutes = [
   {
     path: "/product-library",
     name: "Addon Products",
+    category: "Product Management",
     icon: <IoCube color='inherit' />,
     component: ProductManager,
     layout: "/admin",
@@ -120,7 +129,8 @@ var dashRoutes = [
   {
     path: "/product-category-manager",
     name: "Product Categories",
-    icon: <IoDocumentOutline color='inherit' />,
+    category: "Product Management",
+    icon: <IoFolder color='inherit' />,
     component: ProductCategoryManager,
     layout: "/admin",
     permission: "product-category-manager",
@@ -128,7 +138,8 @@ var dashRoutes = [
   {
     path: "/product-sub-category-manager",
     name: "Product Sub-Categories",
-    icon: <IoDocument color='inherit' />,
+    category: "Product Management",
+    icon: <IoFolderOpen color='inherit' />,
     component: ProductSubCategoryManager,
     layout: "/admin",
     permission: "product-sub-category-manager",
@@ -136,7 +147,8 @@ var dashRoutes = [
   {
     path: "/coupon-manager",
     name: "Coupon Management",
-    icon: <CreditIcon color='inherit' />,
+    category: "Promotions",
+    icon: <IoTicket color='inherit' />,
     component: CouponManager,
     layout: "/admin",
     permission: "coupon-manager",
@@ -144,6 +156,7 @@ var dashRoutes = [
   {
     path: "/discount-manager",
     name: "Discount Management",
+    category: "Promotions",
     icon: <FaPercentage color='inherit' />,
     component: DiscountManager,
     layout: "/admin",
@@ -152,7 +165,8 @@ var dashRoutes = [
   {
     path: "/worker-management",
     name: "Worker Management",
-    icon: <IoPeople color='inherit' />,
+    category: "User Management",
+    icon: <IoConstruct color='inherit' />,
     component: require("views/Dashboard/WorkerManagement.js").default,
     layout: "/admin",
     permission: "worker-management",
@@ -161,6 +175,7 @@ var dashRoutes = [
   {
     path: "/ads-manager",
     name: "Ads Manager",
+    category: "Promotions",
     icon: <FaBullhorn color='inherit' />,
     component: AdsManager,
     layout: "/admin",
@@ -171,7 +186,8 @@ var dashRoutes = [
   {
     path: "/feedback",
     name: "Feedback",
-    icon: <RiSpeaker3Line color='inherit' />,
+    category: "Main",
+    icon: <IoChatboxEllipses color='inherit' />,
     component: Feedback,
     layout: "/admin",
     permission: "feedback",
@@ -179,6 +195,7 @@ var dashRoutes = [
       {
     path: "/settings",
     name: "Settings",
+    category: "Settings",
     icon: <SettingsIcon color='inherit' />,
     component: Settings,
     layout: "/admin",
@@ -187,7 +204,8 @@ var dashRoutes = [
   {
     path: "/chat",
     name: "Chat",
-    icon: <RiSpeaker3Line color='inherit' />,
+    category: "Main",
+    icon: <IoChatbubbles color='inherit' />,
     component: Chat,
     layout: "/admin",
     permission: "chat",

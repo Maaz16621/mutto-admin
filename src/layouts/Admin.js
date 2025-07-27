@@ -96,17 +96,8 @@ export default function Dashboard(props) {
   const getActiveRoute = (routesList) => {
     let activeRoute = "Default Brand Text";
     for (let i = 0; i < routesList.length; i++) {
-      if (routesList[i].collapse) {
-        let collapseActiveRoute = getActiveRoute(routesList[i].views);
-        if (collapseActiveRoute !== activeRoute) {
-          return collapseActiveRoute;
-        }
-      } else if (routesList[i].category) {
-        let categoryActiveRoute = getActiveRoute(routesList[i].views);
-        if (categoryActiveRoute !== activeRoute) {
-          return categoryActiveRoute;
-        }
-      } else {
+      // Check if the route is a valid route (not a category or collapse that doesn't lead to a route)
+      if (routesList[i].layout && routesList[i].path) {
         if (
           window.location.href.indexOf(routesList[i].layout + routesList[i].path) !== -1
         ) {
@@ -120,12 +111,8 @@ export default function Dashboard(props) {
   const getActiveNavbar = (routesList) => {
     let activeNavbar = false;
     for (let i = 0; i < routesList.length; i++) {
-      if (routesList[i].category) {
-        let categoryActiveNavbar = getActiveNavbar(routesList[i].views);
-        if (categoryActiveNavbar !== activeNavbar) {
-          return categoryActiveNavbar;
-        }
-      } else {
+      // Check if the route is a valid route (not a category or collapse that doesn't lead to a route)
+      if (routesList[i].layout && routesList[i].path) {
         if (
           window.location.href.indexOf(routesList[i].layout + routesList[i].path) !== -1
         ) {

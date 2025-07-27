@@ -13,7 +13,12 @@ import {
   Stack,
   useColorMode,
   useColorModeValue,
-  useDisclosure
+  useDisclosure,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
 } from "@chakra-ui/react";
 import { Text as CText } from "@chakra-ui/react";
 import IconBox from "components/Icons/IconBox";
@@ -56,66 +61,101 @@ function Sidebar(props) {
     let activeColor = useColorModeValue("gray.700", "white");
     let inactiveColor = useColorModeValue("gray.400", "gray.400");
     let sidebarActiveShadow = "0px 7px 11px rgba(0, 0, 0, 0.04)";
-    // Only render links, no category headings
-    return routes.flatMap((prop, key) => {
-      if (prop.redirect || prop.sidebar === false) {
-        return [];
+
+    // Group routes by category
+    const categorizedRoutes = routes.reduce((acc, route) => {
+      if (route.redirect || route.sidebar === false) {
+        return acc;
       }
-      if (prop.category && prop.views) {
-        // Just render the links inside, skip the heading
-        return createLinks(prop.views);
+      const category = route.category || "Uncategorized"; // Default category if not specified
+      if (!acc[category]) {
+        acc[category] = [];
       }
-      return [
-        <NavLink to={prop.layout + prop.path} key={key}>
-          <Button
-            boxSize="initial"
-            justifyContent="flex-start"
-            alignItems="center"
-            boxShadow={activeRoute(prop.layout + prop.path) === "active" ? sidebarActiveShadow : undefined}
-            bg={activeRoute(prop.layout + prop.path) === "active" ? activeBg : "transparent"}
-            transition={variantChange}
-            mb={{
-              xl: "6px",
-            }}
-            mx={{
-              xl: "auto",
-            }}
-            ps={{
-              sm: "10px",
-              xl: "16px",
-            }}
-            py="12px"
-            borderRadius="15px"
-            _hover="none"
-            w="100%"
-            _active={{
-              bg: "inherit",
-              transform: "none",
-              borderColor: "transparent",
-            }}
-            _focus={{
-              boxShadow: activeRoute(prop.layout + prop.path) === "active" ? "0px 7px 11px rgba(0, 0, 0, 0.04)" : "none",
-            }}
-          >
-            <Flex>
-              <IconBox
-                bg={activeRoute(prop.layout + prop.path) === "active" ? "#FF7D2E" : inactiveBg}
-                color={activeRoute(prop.layout + prop.path) === "active" ? "white" : "#FF7D2E"}
-                h="30px"
-                w="30px"
-                me="12px"
-                transition={variantChange}
+      acc[category].push(route);
+      return acc;
+    }, {});
+
+    const renderedLinks = Object.keys(categorizedRoutes).map((categoryName, index) => {
+      const categoryRoutes = categorizedRoutes[categoryName];
+      const isUncategorized = categoryName === "Uncategorized";
+
+      return (
+        <Accordion allowMultiple defaultIndex={isUncategorized ? [0] : []} key={categoryName}>
+          <AccordionItem border="none">
+            <h2>
+              <AccordionButton
+                _expanded={{ bg: "transparent" }}
+                _hover={{ bg: "transparent" }}
+                py="12px"
+                ps="16px"
+                mx="auto"
+                mb="6px"
+                borderRadius="15px"
+                w="100%"
+                justifyContent="space-between"
               >
-                {prop.icon}
-              </IconBox>
-              <CText color={activeRoute(prop.layout + prop.path) === "active" ? activeColor : inactiveColor} my="auto" fontSize="sm" as="span">
-                {prop.name}
-              </CText>
-            </Flex>
-          </Button>
-        </NavLink>
-      ];
+                <CText
+                  color={activeColor}
+                  fontWeight="bold"
+                  fontSize="sm"
+                  my="auto"
+                  as="span"
+                >
+                  {categoryName}
+                </CText>
+                <AccordionIcon color={activeColor} />
+              </AccordionButton>
+            </h2>
+            <AccordionPanel pb={4} px="0">
+              {categoryRoutes.map((prop, key) => (
+                <NavLink to={prop.layout + prop.path} key={key}>
+                  <Button
+                    boxSize="initial"
+                    justifyContent="flex-start"
+                    alignItems="center"
+                    boxShadow={activeRoute(prop.layout + prop.path) === "active" ? sidebarActiveShadow : undefined}
+                    bg={activeRoute(prop.layout + prop.path) === "active" ? activeBg : "transparent"}
+                    transition={variantChange}
+                    mb="6px"
+                    mx="auto"
+                    ps="16px"
+                    py="12px"
+                    borderRadius="15px"
+                    _hover="none"
+                    w="100%"
+                    _active={{
+                      bg: "inherit",
+                      transform: "none",
+                      borderColor: "transparent",
+                    }}
+                    _focus={{
+                      boxShadow: activeRoute(prop.layout + prop.path) === "active" ? "0px 7px 11px rgba(0, 0, 0, 0.04)" : "none",
+                    }}
+                  >
+                    <Flex>
+                      <IconBox
+                        bg={activeRoute(prop.layout + prop.path) === "active" ? "#FF7D2E" : inactiveBg}
+                        color={activeRoute(prop.layout + prop.path) === "active" ? "white" : "#FF7D2E"}
+                        h="30px"
+                        w="30px"
+                        me="12px"
+                        transition={variantChange}
+                      >
+                        {prop.icon}
+                      </IconBox>
+                      <CText color={activeRoute(prop.layout + prop.path) === "active" ? activeColor : inactiveColor} my="auto" fontSize="sm" as="span">
+                        {prop.name}
+                      </CText>
+                    </Flex>
+                  </Button>
+                </NavLink>
+              ))}
+            </AccordionPanel>
+          </AccordionItem>
+        </Accordion>
+      );
     });
+    return renderedLinks;
   };
   const { logo, routes } = props;
 
@@ -206,6 +246,7 @@ export function SidebarResponsive(props) {
   // this is for the rest of the collapses
   const [state, setState] = React.useState({});
   const mainPanel = React.useRef();
+  let variantChange = "0.2s linear"; // Define variantChange here
   // verifies if routeName is the one active (in browser input)
   const activeRoute = (routeName) => {
     return location.pathname === routeName ? "active" : "";
@@ -223,138 +264,109 @@ export function SidebarResponsive(props) {
 
   // this function creates the links and collapses that appear in the sidebar (left menu)
   const createLinks = (routes) => {
-    return routes.map((prop, key) => {
-      if (prop.redirect || prop.sidebar === false) {
-        return null;
+    const activeBg = useColorModeValue("white", "navy.700");
+    const inactiveBg = useColorModeValue("white", "navy.700");
+    const activeColor = useColorModeValue("gray.700", "white");
+    const inactiveColor = useColorModeValue("gray.400", "white");
+    const sidebarActiveShadow = useColorModeValue(
+      "0px 7px 11px rgba(0, 0, 0, 0.04)",
+      "none"
+    );
+
+    // Group routes by category
+    const categorizedRoutes = routes.reduce((acc, route) => {
+      if (route.redirect || route.sidebar === false) {
+        return acc;
       }
-      if (prop.category) {
-        var st = {};
-        st[prop["state"]] = !state[prop.state];
-        return (
-          <>
-            <CText
-              color={activeColor}
-              fontWeight="bold"
-              mb={{
-                xl: "6px",
-              }}
-              mx="auto"
-              ps={{
-                sm: "10px",
-                xl: "16px",
-              }}
-              py="12px"
-            >
-              {prop.name}
-            </CText>
-            {createLinks(prop.views)}
-          </>
-        );
+      const category = route.category || "Uncategorized"; // Default category if not specified
+      if (!acc[category]) {
+        acc[category] = [];
       }
+      acc[category].push(route);
+      return acc;
+    }, {});
+
+    const renderedLinks = Object.keys(categorizedRoutes).map((categoryName, index) => {
+      const categoryRoutes = categorizedRoutes[categoryName];
+      const isUncategorized = categoryName === "Uncategorized";
+
       return (
-        <NavLink to={prop.layout + prop.path} key={key}>
-          {activeRoute(prop.layout + prop.path) === "active" ? (
-            <Button
-              boxSize="initial"
-              justifyContent="flex-start"
-              alignItems="center"
-              bg={activeBg}
-              boxShadow={sidebarActiveShadow}
-              mb={{
-                xl: "6px",
-              }}
-              mx={{
-                xl: "auto",
-              }}
-              ps={{
-                sm: "10px",
-                xl: "16px",
-              }}
-              py="12px"
-              borderRadius="15px"
-              _hover="none"
-              w="100%"
-              _active={{
-                bg: "inherit",
-                transform: "none",
-                borderColor: "transparent",
-              }}
-              _focus={{
-                boxShadow: "none",
-              }}
-            >
-              <Flex>
-                {typeof prop.icon === "string" ? (
-                  <Box as="span" me="12px">{prop.icon}</Box>
-                ) : (
-                  <IconBox
-                    bg="#FF7D2E"
-                    color="white"
-                    h="30px"
-                    w="30px"
-                    me="12px"
-                  >
-                    {prop.icon}
-                  </IconBox>
-                )}
-                <CText color={activeColor} my="auto" fontSize="sm" as="span">
-                  {prop.name}
+        <Accordion allowMultiple defaultIndex={isUncategorized ? [0] : []} key={categoryName}>
+          <AccordionItem border="none">
+            <h2>
+              <AccordionButton
+                _expanded={{ bg: "transparent" }}
+                _hover={{ bg: "transparent" }}
+                py="12px"
+                ps="16px"
+                mx="auto"
+                mb="6px"
+                borderRadius="15px"
+                w="100%"
+                justifyContent="space-between"
+              >
+                <CText
+                  color={activeColor}
+                  fontWeight="bold"
+                  fontSize="sm"
+                  my="auto"
+                  as="span"
+                >
+                  {categoryName}
                 </CText>
-              </Flex>
-            </Button>
-          ) : (
-            <Button
-              boxSize="initial"
-              justifyContent="flex-start"
-              alignItems="center"
-              bg="transparent"
-              mb={{
-                xl: "6px",
-              }}
-              mx={{
-                xl: "auto",
-              }}
-              py="12px"
-              ps={{
-                sm: "10px",
-                xl: "16px",
-              }}
-              borderRadius="15px"
-              _hover="none"
-              w="100%"
-              _active={{
-                bg: "inherit",
-                transform: "none",
-                borderColor: "transparent",
-              }}
-              _focus={{
-                boxShadow: "none",
-              }}
-            >
-              <Flex>
-                {typeof prop.icon === "string" ? (
-                  <Box as="span" me="12px">{prop.icon}</Box>
-                ) : (
-                  <IconBox
-                    bg={inactiveBg}
-                    color="#FF7D2E"
-                    h="30px"
-                    w="30px"
-                    me="12px"
+                <AccordionIcon color={activeColor} />
+              </AccordionButton>
+            </h2>
+            <AccordionPanel pb={4} px="0">
+              {categoryRoutes.map((prop, key) => (
+                <NavLink to={prop.layout + prop.path} key={key}>
+                  <Button
+                    boxSize="initial"
+                    justifyContent="flex-start"
+                    alignItems="center"
+                    boxShadow={activeRoute(prop.layout + prop.path) === "active" ? sidebarActiveShadow : undefined}
+                    bg={activeRoute(prop.layout + prop.path) === "active" ? activeBg : "transparent"}
+                    transition={variantChange}
+                    mb="6px"
+                    mx="auto"
+                    ps="16px"
+                    py="12px"
+                    borderRadius="15px"
+                    _hover="none"
+                    w="100%"
+                    _active={{
+                      bg: "inherit",
+                      transform: "none",
+                      borderColor: "transparent",
+                    }}
+                    _focus={{
+                      boxShadow: activeRoute(prop.layout + prop.path) === "active" ? "0px 7px 11px rgba(0, 0, 0, 0.04)" : "none",
+                    }}
                   >
-                    {prop.icon}
-                  </IconBox>
-                )}
-                {/* Use Chakra UI Text, not window.Text DOM constructor */}
-                <CText color={inactiveColor} my="auto" fontSize="sm" as="span">
-                  {prop.name}
-                </CText>
-              </Flex>
-            </Button>
-          )}
-        </NavLink>
+                    <Flex>
+                      <IconBox
+                        bg={activeRoute(prop.layout + prop.path) === "active" ? "#FF7D2E" : inactiveBg}
+                        color={activeRoute(prop.layout + prop.path) === "active" ? "white" : "#FF7D2E"}
+                        h="30px"
+                        w="30px"
+                        me="12px"
+                        transition={variantChange}
+                      >
+                        {prop.icon}
+                      </IconBox>
+                      <CText color={activeRoute(prop.layout + prop.path) === "active" ? activeColor : inactiveColor} my="auto" fontSize="sm" as="span">
+                        {prop.name}
+                      </CText>
+                    </Flex>
+                  </Button>
+                </NavLink>
+              ))}
+            </AccordionPanel>
+          </AccordionItem>
+        </Accordion>
       );
     });
+    return renderedLinks;
   };
 
   var links = <>{createLinks(routes)}</>;
