@@ -18,6 +18,7 @@ import Settings from "views/Dashboard/Settings.js"; // Import the new Settings c
 import AdsManager from "views/Dashboard/AdsManager.js";
 import SubCategoryManager from "views/Dashboard/SubCategoryManager.js";
 import Feedback from "views/Dashboard/Feedback.js";
+import Chat from "views/Dashboard/Chat.js";
 
 import {
   HomeIcon,
@@ -182,6 +183,14 @@ var dashRoutes = [
     component: Settings,
     layout: "/admin",
     permission: "settings",
+  },
+  {
+    path: "/chat",
+    name: "Chat",
+    icon: <RiSpeaker3Line color='inherit' />,
+    component: Chat,
+    layout: "/admin",
+    permission: "chat",
   },
 ];
 export default dashRoutes;

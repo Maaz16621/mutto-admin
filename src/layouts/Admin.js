@@ -226,7 +226,7 @@ export default function Dashboard(props) {
           <PanelContent>
             <PanelContainer>
               <Switch>
-                {getRoutes(routes, userPermissions)} {/* Pass userPermissions here */}
+                {getRoutes(accessibleRoutes)}
                 {/* No default redirect here, handled by useEffect and getRoutes */}
               </Switch>
             </PanelContainer>
