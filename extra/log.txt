@@ -1,41 +1,58 @@
-Uncaught runtime errors:
+Compiled with problems:
 ×
+ERROR in ./src/layouts/Admin.js
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: D:\Data\Projects\Mutto Car Wash\src\layouts\Admin.js: 'import' and 'export' may only appear at the top level. (169:2)
+
+  167 |   document.documentElement.dir = "ltr";
+  168 |
+> 169 |   import React, { useState } from "react";
+      |   ^
+  170 | import { Redirect, Route, Switch, useHistory } from "react-router-dom";
+  171 | import { Portal, useDisclosure, Box, useColorMode, Spinner, Flex } from "@chakra-ui/react";
+  172 | import Footer from "components/Footer/Footer.js";
+    at constructor (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:367:19)
+    at FlowParserMixin.raise (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:6627:19)
+    at FlowParserMixin.parseStatementContent (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12871:18)
+    at FlowParserMixin.parseStatementLike (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12767:17)
+    at FlowParserMixin.parseStatementLike (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:2946:24)
+    at FlowParserMixin.parseStatementListItem (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12747:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13316:61)
+    at FlowParserMixin.parseBlockBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13309:10)
+    at FlowParserMixin.parseBlock (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13297:10)
+    at FlowParserMixin.parseFunctionBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12101:24)
+    at FlowParserMixin.parseFunctionBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:2923:11)
+    at FlowParserMixin.parseFunctionBodyAndFinish (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12087:10)
+    at FlowParserMixin.parseFunctionBodyAndFinish (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:2931:18)
+    at D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13445:12
+    at FlowParserMixin.withSmartMixTopicForbiddingContext (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12404:14)
+    at FlowParserMixin.parseFunction (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13444:10)
+    at FlowParserMixin.parseExportDefaultExpression (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13907:19)
+    at FlowParserMixin.parseExportDefaultExpression (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:2994:18)
+    at FlowParserMixin.parseExport (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13828:25)
+    at FlowParserMixin.parseStatementContent (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12878:27)
+    at FlowParserMixin.parseStatementLike (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12767:17)
+    at FlowParserMixin.parseStatementLike (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:2946:24)
+    at FlowParserMixin.parseModuleItem (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12744:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13316:36)
+    at FlowParserMixin.parseBlockBody (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:13309:10)
+    at FlowParserMixin.parseProgram (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12625:10)
+    at FlowParserMixin.parseTopLevel (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:12615:25)
+    at FlowParserMixin.parseTopLevel (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:3715:28)
+    at FlowParserMixin.parse (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:14492:10)
+    at parse (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\parser\lib\index.js:14526:38)
+    at parser (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\core\lib\parser\index.js:41:34)
+    at parser.next (<anonymous>)
+    at normalizeFile (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+    at normalizeFile.next (<anonymous>)
+    at run (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\core\lib\transformation\index.js:22:50)
+    at run.next (<anonymous>)
+    at transform (D:\Data\Projects\Mutto Car Wash\node_modules\@babel\core\lib\transform.js:22:33)
+    at transform.next (<anonymous>)
+    at step (D:\Data\Projects\Mutto Car Wash\node_modules\gensync\index.js:261:32)
+    at D:\Data\Projects\Mutto Car Wash\node_modules\gensync\index.js:273:13
+    at async.call.result.err.err (D:\Data\Projects\Mutto Car Wash\node_modules\gensync\index.js:223:11)
 ERROR
-variantChange is not defined
-ReferenceError: variantChange is not defined
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:461:29
-    at Array.map (<anonymous>)
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:453:38
-    at Array.map (<anonymous>)
-    at createLinks (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:400:58)
-    at SidebarResponsive (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:538:15)
-    at renderWithHooks (http://localhost:3000/mutto-admin/static/js/bundle.js:181661:22)
-    at updateFunctionComponent (http://localhost:3000/mutto-admin/static/js/bundle.js:183763:24)
-    at beginWork (http://localhost:3000/mutto-admin/static/js/bundle.js:185209:20)
-    at HTMLUnknownElement.callCallback (http://localhost:3000/mutto-admin/static/js/bundle.js:172238:18)
-ERROR
-variantChange is not defined
-ReferenceError: variantChange is not defined
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:461:29
-    at Array.map (<anonymous>)
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:453:38
-    at Array.map (<anonymous>)
-    at createLinks (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:400:58)
-    at SidebarResponsive (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:538:15)
-    at renderWithHooks (http://localhost:3000/mutto-admin/static/js/bundle.js:181661:22)
-    at updateFunctionComponent (http://localhost:3000/mutto-admin/static/js/bundle.js:183763:24)
-    at beginWork (http://localhost:3000/mutto-admin/static/js/bundle.js:185209:20)
-    at HTMLUnknownElement.callCallback (http://localhost:3000/mutto-admin/static/js/bundle.js:172238:18)
-ERROR
-variantChange is not defined
-ReferenceError: variantChange is not defined
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:461:29
-    at Array.map (<anonymous>)
-    at http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:453:38
-    at Array.map (<anonymous>)
-    at createLinks (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:400:58)
-    at SidebarResponsive (http://localhost:3000/mutto-admin/main.ca4d5b2b5ef313723174.hot-update.js:538:15)
-    at renderWithHooks (http://localhost:3000/mutto-admin/static/js/bundle.js:181661:22)
-    at updateFunctionComponent (http://localhost:3000/mutto-admin/static/js/bundle.js:183763:24)
-    at beginWork (http://localhost:3000/mutto-admin/static/js/bundle.js:185209:20)
-    at HTMLUnknownElement.callCallback (http://localhost:3000/mutto-admin/static/js/bundle.js:172238:18)
+[eslint] 
+src\layouts\Admin.js
+  Line 169:2:  Parsing error: 'import' and 'export' may only appear at the top level. (169:2)
