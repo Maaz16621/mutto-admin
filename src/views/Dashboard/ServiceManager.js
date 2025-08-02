@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { InputGroup, InputLeftElement } from "@chakra-ui/react";
-import { SearchIcon } from "@chakra-ui/icons";
+import { InputGroup, InputLeftElement, Textarea } from "@chakra-ui/react";
+import { SearchIcon, AddIcon, CloseIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
@@ -33,22 +33,20 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  IconButton
+  IconButton,
+  HStack,
+  VStack
 } from "@chakra-ui/react";
-import "react-quill/dist/quill.snow.css";
-import ReactQuill from "react-quill";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useSortBy, usePagination } from "react-table";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { firestore, storage } from "../../firebase";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 import { SimpleGrid } from "@chakra-ui/react";
-import { Tag, TagLabel, TagCloseButton } from "@chakra-ui/react";
 export default function ServiceManager() {
-// Named export for sidebar/routing compatibility
   const [services, setServices] = useState([]);
   const [search, setSearch] = useState("");
   const [subCategories, setSubCategories] = useState([]);
@@ -56,24 +54,26 @@ export default function ServiceManager() {
   const [form, setForm] = useState({
     name: "",
     description: "",
+    importantNotes: [],
+    whatsIncluded: [],
     subCategoryId: "",
     cost: "",
     duration: "",
     graceTime: "",
     bufferTime: "",
     active: true,
-    iconUrl: "",
-    relatedServices: [] // new field for related services
+    imageUrls: [],
+    relatedServices: []
   });
-  const [serviceInput, setServiceInput] = useState("");
-  const [iconFile, setIconFile] = useState(null);
-  const [iconPreview, setIconPreview] = useState("");
+  const [includedItem, setIncludedItem] = useState("");
+  const [noteItem, setNoteItem] = useState("");
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedService, setSelectedService] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  // Fetch categories for dropdown
   const fetchSubCategories = async () => {
     try {
       const querySnapshot = await getDocs(collection(firestore, "subCategories"));
@@ -83,7 +83,6 @@ export default function ServiceManager() {
     }
   };
 
-  // Fetch services
   const fetchServices = async () => {
     setLoading(true);
     try {
@@ -100,44 +99,48 @@ export default function ServiceManager() {
     fetchServices();
   }, []);
 
-  // Add or update service
   const handleSave = async () => {
     if (!form.name || !form.subCategoryId || !form.cost || !form.duration) {
       toast({ title: "Name, Sub-Category, Cost, and Duration are required", status: "warning" });
       return;
     }
     setLoading(true);
-    let iconUrl = form.iconUrl;
+    let imageUrls = form.imageUrls || [];
     try {
-      // If a new icon file is selected, upload it
-      if (iconFile) {
-        const fileExt = iconFile.name.split('.').pop();
-        const fileName = `service-icons/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-        const storageRef = ref(storage, fileName);
-        const uploadTask = uploadBytesResumable(storageRef, iconFile);
-        await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed',
-            (snapshot) => {
-              setUploadProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
-            },
-            (error) => reject(error),
-            async () => {
-              iconUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve();
-            }
-          );
+      if (imageFiles.length > 0) {
+        const uploadPromises = imageFiles.map(file => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `service-images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+          const storageRef = ref(storage, fileName);
+          const uploadTask = uploadBytesResumable(storageRef, file);
+          return new Promise((resolve, reject) => {
+            uploadTask.on('state_changed',
+              (snapshot) => {
+                setUploadProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+              },
+              (error) => reject(error),
+              async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadURL);
+              }
+            );
+          });
         });
+        const newImageUrls = await Promise.all(uploadPromises);
+        imageUrls = [...imageUrls, ...newImageUrls];
       }
       const data = {
         name: form.name,
         description: form.description,
+        importantNotes: form.importantNotes,
+        whatsIncluded: form.whatsIncluded,
         subCategoryId: form.subCategoryId,
         cost: Number(form.cost),
         duration: Number(form.duration),
         graceTime: form.graceTime ? Number(form.graceTime) : 0,
         bufferTime: form.bufferTime ? Number(form.bufferTime) : 0,
         active: !!form.active,
-        iconUrl: iconUrl || "",
+        imageUrls: imageUrls,
         updatedAt: serverTimestamp(),
         relatedServices: form.relatedServices || [],
       };
@@ -153,50 +156,55 @@ export default function ServiceManager() {
       }
       fetchServices();
       onClose();
-      setForm({ name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "", relatedServices: [] });
-      setIconFile(null);
-      setIconPreview("");
+      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], relatedServices: [] });
+      setImageFiles([]);
+      setImagePreviews([]);
       setUploadProgress(0);
       setSelectedService(null);
-      setServiceInput("");
     } catch (err) {
       toast({ title: "Error saving service", status: "error", description: err.message });
     }
     setLoading(false);
   };
 
-  // Open modal for add/edit
   const openEdit = (service) => {
     setSelectedService(service);
     setForm(service
       ? {
           name: service.name || "",
           description: service.description || "",
+          importantNotes: service.importantNotes || [],
+          whatsIncluded: service.whatsIncluded || [],
           subCategoryId: service.subCategoryId || "",
           cost: service.cost || "",
           duration: service.duration || "",
           graceTime: service.graceTime || "",
           bufferTime: service.bufferTime || "",
           active: service.active !== undefined ? service.active : true,
-          iconUrl: service.iconUrl || "",
+          imageUrls: service.imageUrls || [],
           relatedServices: service.relatedServices || [],
         }
-      : { name: "", description: "", categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, iconUrl: "", relatedServices: [] }
+      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], relatedServices: [] }
     );
-    setIconFile(null);
-    setIconPreview(service && service.iconUrl ? service.iconUrl : "");
+    setImageFiles([]);
+    setImagePreviews(service && service.imageUrls ? service.imageUrls : []);
     setUploadProgress(0);
-    setServiceInput("");
     onOpen();
   };
 
-  // Delete service (with modal)
   const [deleteModal, setDeleteModal] = useState({ open: false, service: null });
   const handleDelete = async () => {
     const service = deleteModal.service;
     if (!service) return;
     setLoading(true);
     try {
+      if (service.imageUrls && service.imageUrls.length > 0) {
+        const deletePromises = service.imageUrls.map(url => {
+          const imageRef = ref(storage, url);
+          return deleteObject(imageRef);
+        });
+        await Promise.all(deletePromises);
+      }
       await deleteDoc(doc(firestore, "services", service.id));
       toast({ title: "Service deleted" });
       fetchServices();
@@ -207,12 +215,11 @@ export default function ServiceManager() {
     setLoading(false);
   };
 
-  // Table columns
   const columns = useMemo(() => [
     {
-      Header: "Icon",
-      accessor: "iconUrl",
-      Cell: ({ value }) => (value ? <img src={value} alt="icon" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-"),
+      Header: "Image",
+      accessor: "imageUrls",
+      Cell: ({ value }) => (value && value.length > 0 ? <img src={value[0]} alt="service" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-"),
       disableSortBy: true,
     },
     { Header: "Name", accessor: "name" },
@@ -222,8 +229,6 @@ export default function ServiceManager() {
     }},
     { Header: "Cost", accessor: "cost" },
     { Header: "Duration (min)", accessor: "duration" },
-    { Header: "Grace (min)", accessor: "graceTime" },
-    { Header: "Buffer (min)", accessor: "bufferTime" },
     { Header: "Active", accessor: "active", Cell: ({ value }) => value ? "Yes" : "No" },
     {
       Header: "Actions",
@@ -246,7 +251,6 @@ export default function ServiceManager() {
     },
   ], [subCategories]);
 
-  // Filtered data for search
   const filteredServices = useMemo(() => {
     if (!search) return services;
     const q = search.toLowerCase();
@@ -254,13 +258,11 @@ export default function ServiceManager() {
       (s.name && s.name.toLowerCase().includes(q)) ||
       (s.cost && String(s.cost).includes(q)) ||
       (s.duration && String(s.duration).includes(q)) ||
-      (s.graceTime && String(s.graceTime).includes(q)) ||
-      (s.bufferTime && String(s.bufferTime).includes(q)) ||
       (s.subCategoryId && subCategories.find(c => c.id === s.subCategoryId)?.name?.toLowerCase().includes(q))
     );
   }, [search, services]);
 
-  const {
+  const { 
     getTableProps,
     getTableBodyProps,
     headerGroups,
@@ -341,7 +343,6 @@ export default function ServiceManager() {
               </Tbody>
             </Table>
           )}
-          {/* Pagination Controls */}
           {!loading && pageOptions.length > 1 && (
             <Flex mt={4} align="center" justify="flex-end" gap={2} flexWrap="wrap">
               <Button size="sm" onClick={() => gotoPage(0)} disabled={!canPreviousPage}>&lt;&lt;</Button>
@@ -368,7 +369,6 @@ export default function ServiceManager() {
           )}
         </CardBody>
       </Card>
-      {/* Delete confirmation modal - only render when open */}
       {deleteModal.open && (
         <Modal isOpen={deleteModal.open} onClose={() => setDeleteModal({ open: false, service: null })} isCentered>
           <ModalOverlay />
@@ -377,7 +377,7 @@ export default function ServiceManager() {
             <ModalCloseButton />
             <ModalBody>
               Are you sure you want to delete service <b>{deleteModal.service?.name}</b>? This cannot be undone.<br/>
-              <Box mt={2} color="red.500" fontSize="sm">This will permanently remove the service from the system.</Box>
+              <Box mt={2} color="red.500" fontSize="sm">This will permanently remove the service and all its images from the system.</Box>
             </ModalBody>
             <ModalFooter>
               <Button colorScheme="red" mr={3} onClick={handleDelete} isLoading={loading} loadingText="Deleting...">Delete</Button>
@@ -386,7 +386,6 @@ export default function ServiceManager() {
           </ModalContent>
         </Modal>
       )}
-      {/* Add/Edit Service modal - only render when open */}
       {isOpen && (
         <Modal isOpen={isOpen} onClose={onClose} isCentered size="2xl">
           <ModalOverlay />
@@ -401,57 +400,45 @@ export default function ServiceManager() {
               )}
               <Box>
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                  {/* Service Icon Upload */}
                   <FormControl mb={3}>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Service Icon
-                      <Tooltip label="Upload an icon for this service. Shown in the app and admin panel." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Service Images</FormLabel>
                     <Input
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={e => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          setIconFile(file);
-                          setIconPreview(URL.createObjectURL(file));
+                        const files = Array.from(e.target.files);
+                        if (files.length > 0) {
+                          setImageFiles(files);
+                          const previewUrls = files.map(file => URL.createObjectURL(file));
+                          setImagePreviews(previewUrls);
                         } else {
-                          setIconFile(null);
-                          setIconPreview(form.iconUrl || "");
+                          setImageFiles([]);
+                          setImagePreviews(form.imageUrls || []);
                         }
                       }}
                     />
-                    {(iconPreview || form.iconUrl) && (
-                      <Box mt={2}>
-                        <img
-                          src={iconPreview || form.iconUrl}
-                          alt="Service Icon Preview"
-                          style={{ maxWidth: "60px", maxHeight: "60px", borderRadius: 8, border: "1px solid #eee" }}
-                        />
-                      </Box>
-                    )}
+                    <Flex mt={2} wrap="wrap" gap={2}>
+                      {imagePreviews.map((preview, index) => (
+                        <Box key={index} position="relative">
+                          <img
+                            src={preview}
+                            alt={`Service Image Preview ${index + 1}`}
+                            style={{ maxWidth: "60px", maxHeight: "60px", borderRadius: 8, border: "1px solid #eee" }}
+                          />
+                        </Box>
+                      ))}
+                    </Flex>
                     {uploadProgress > 0 && uploadProgress < 100 && (
                       <Box mt={1} fontSize="sm" color="gray.500">Uploading: {uploadProgress}%</Box>
                     )}
                   </FormControl>
                   <FormControl mb={3} isRequired>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Service Name
-                      <Tooltip label="The name of the service (e.g., Exterior Wash, Full Detailing)." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Service Name</FormLabel>
                     <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                   </FormControl>
                   <FormControl mb={3} isRequired>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Sub-Category
-                      <Tooltip label="The sub-category this service belongs to." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Sub-Category</FormLabel>
                     <Select value={form.subCategoryId} onChange={e => setForm(f => ({ ...f, subCategoryId: e.target.value }))}>
                       <option value="">Select Sub-Category</option>
                       {subCategories.map(cat => (
@@ -460,75 +447,81 @@ export default function ServiceManager() {
                     </Select>
                   </FormControl>
                   <FormControl mb={3} isRequired>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Cost
-                      <Tooltip label="The price charged for this service (in your local currency)." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Cost</FormLabel>
                     <Input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} min={0} />
                   </FormControl>
                   <FormControl mb={3} isRequired>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Duration (minutes)
-                      <Tooltip label="How long this service takes to complete (in minutes)." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Duration (minutes)</FormLabel>
                     <Input type="number" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} step="60" />
                   </FormControl>
                   <FormControl mb={3}>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Grace Time (minutes)
-                      <Tooltip label="Extra time allowed after booking before it's considered missed." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Grace Time (minutes)</FormLabel>
                     <Input type="number" value={form.graceTime} onChange={e => setForm(f => ({ ...f, graceTime: e.target.value }))} min={0} />
                   </FormControl>
                   <FormControl mb={3}>
-                    <FormLabel display="flex" alignItems="center" gap={1}>
-                      Buffer Time (minutes)
-                      <Tooltip label="Extra time between bookings to prevent overlap." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel>Buffer Time (minutes)</FormLabel>
                     <Input type="number" value={form.bufferTime} onChange={e => setForm(f => ({ ...f, bufferTime: e.target.value }))} min={0} />
                   </FormControl>
                   <FormControl mb={3} display="flex" alignItems="center">
-                    <FormLabel mb={0} display="flex" alignItems="center" gap={1}>
-                      Active
-                      <Tooltip label="Toggle to activate or deactivate this service." placement="right" hasArrow>
-                        <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                      </Tooltip>
-                    </FormLabel>
+                    <FormLabel mb={0}>Active</FormLabel>
                     <Switch isChecked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
                   </FormControl>
-                  {/* Removed Related Services field from Service modal as requested */}
                   <Box gridColumn={{ base: '1', md: '1 / span 2' }}>
                     <FormControl mb={3}>
-                      <FormLabel display="flex" alignItems="center" gap={1}>
-                        Description
-                        <Tooltip label="A detailed description of the service, visible to users." placement="right" hasArrow>
-                          <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                        </Tooltip>
-                      </FormLabel>
-                      <Box bg="white" borderRadius="md" borderWidth={1} borderColor="gray.200" minH="180px">
-                        <ReactQuill
-                          theme="snow"
-                          value={form.description}
-                          onChange={val => setForm(f => ({ ...f, description: val }))}
-                          style={{ height: "140px" }}
-                          modules={{
-                            toolbar: [
-                              [{ 'header': [1, 2, false] }],
-                              ['bold', 'italic', 'underline', 'strike'],
-                              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                              ['link', 'clean']
-                            ]
-                          }}
-                        />
-                      </Box>
+                      <FormLabel>Description</FormLabel>
+                      <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                    </FormControl>
+                  </Box>
+                  <Box gridColumn={{ base: '1', md: '1 / span 2' }}>
+                    <FormControl mb={3}>
+                      <FormLabel>Important Notes</FormLabel>
+                      <VStack align="start">
+                        {form.importantNotes.map((item, index) => (
+                          <HStack key={index}>
+                            <Input value={item} isReadOnly />
+                            <IconButton icon={<CloseIcon />} size="sm" onClick={() => {
+                              const newItems = [...form.importantNotes];
+                              newItems.splice(index, 1);
+                              setForm(f => ({ ...f, importantNotes: newItems }));
+                            }}/>
+                          </HStack>
+                        ))}
+                        <HStack>
+                          <Input value={noteItem} onChange={e => setNoteItem(e.target.value)} placeholder="Add a note" />
+                          <IconButton icon={<AddIcon />} size="sm" onClick={() => {
+                            if (noteItem.trim() !== "") {
+                              setForm(f => ({ ...f, importantNotes: [...f.importantNotes, noteItem.trim()] }));
+                              setNoteItem("");
+                            }
+                          }}/>
+                        </HStack>
+                      </VStack>
+                    </FormControl>
+                  </Box>
+                  <Box gridColumn={{ base: '1', md: '1 / span 2' }}>
+                    <FormControl mb={3}>
+                      <FormLabel>What's Included</FormLabel>
+                      <VStack align="start">
+                        {form.whatsIncluded.map((item, index) => (
+                          <HStack key={index}>
+                            <Input value={item} isReadOnly />
+                            <IconButton icon={<CloseIcon />} size="sm" onClick={() => {
+                              const newItems = [...form.whatsIncluded];
+                              newItems.splice(index, 1);
+                              setForm(f => ({ ...f, whatsIncluded: newItems }));
+                            }}/>
+                          </HStack>
+                        ))}
+                        <HStack>
+                          <Input value={includedItem} onChange={e => setIncludedItem(e.target.value)} placeholder="Add an item" />
+                          <IconButton icon={<AddIcon />} size="sm" onClick={() => {
+                            if (includedItem.trim() !== "") {
+                              setForm(f => ({ ...f, whatsIncluded: [...f.whatsIncluded, includedItem.trim()] }));
+                              setIncludedItem("");
+                            }
+                          }}/>
+                        </HStack>
+                      </VStack>
                     </FormControl>
                   </Box>
                 </SimpleGrid>

@@ -65,9 +65,9 @@ export default function SubCategoryManager() {
           iconUrl = await getDownloadURL(iconRef);
         } catch (uploadErr) {
           toast({
-            title: "Icon upload failed",
+            title: "Image upload failed",
             status: "error",
-            description: uploadErr.message || "Could not upload icon. Please check your Firebase Storage setup.",
+            description: uploadErr.message || "Could not upload image. Please check your Firebase Storage setup.",
             position: "top-right",
             duration: 8000,
             isClosable: true,
@@ -119,7 +119,7 @@ export default function SubCategoryManager() {
 
   const columns = useMemo(() => [
     {
-      Header: "Icon",
+      Header: "Image",
       accessor: "iconUrl",
       Cell: ({ value }) => value ? <img src={value} alt="icon" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-",
       disableSortBy: true,
@@ -174,7 +174,7 @@ export default function SubCategoryManager() {
           const iconRef = ref(storage, subCategory.iconUrl);
           await deleteObject(iconRef);
         } catch (err) {
-          toast({ title: "Warning", description: "Could not delete icon from storage.", status: "warning", position: "top-right" });
+          toast({ title: "Warning", description: "Could not delete image from storage.", status: "warning", position: "top-right" });
         }
       }
       await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "subCategories", subCategory.id)));
@@ -337,7 +337,7 @@ export default function SubCategoryManager() {
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
-              <FormLabel>Icon Image</FormLabel>
+              <FormLabel>Image</FormLabel>
               <Input type="file" accept="image/*" onChange={e => setIconFile(e.target.files[0])} />
               {form.iconUrl && !iconFile && (
                 <Box mt={2}><img src={form.iconUrl} alt="icon" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} /></Box>
