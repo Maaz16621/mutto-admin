@@ -434,7 +434,6 @@ export default function StaffManagement() {
                 <VStack align="start">
                   <Checkbox isChecked={form.permissions.includes("dashboard")} onChange={e => handlePermissionChange("dashboard", e.target.checked)}>Dashboard</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("staff-management")} onChange={e => handlePermissionChange("staff-management", e.target.checked)}>Staff Management</Checkbox>
-                  <Checkbox isChecked={form.permissions.includes("users")} onChange={e => handlePermissionChange("users", e.target.checked)}>Users</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("category-manager")} onChange={e => handlePermissionChange("category-manager", e.target.checked)}>Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("service-manager")} onChange={e => handlePermissionChange("service-manager", e.target.checked)}>Service Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("product-library")} onChange={e => handlePermissionChange("product-library", e.target.checked)}>Addon Products</Checkbox>
@@ -447,7 +446,6 @@ export default function StaffManagement() {
                   <Checkbox isChecked={form.permissions.includes("product-category-manager")} onChange={e => handlePermissionChange("product-category-manager", e.target.checked)}>Product Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("product-sub-category-manager")} onChange={e => handlePermissionChange("product-sub-category-manager", e.target.checked)}>Product Sub-Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("feedback")} onChange={e => handlePermissionChange("feedback", e.target.checked)}>Feedback</Checkbox>
-                  <Checkbox isChecked={form.permissions.includes("bookings")} onChange={e => handlePermissionChange("bookings", e.target.checked)}>Bookings</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("chat")} onChange={e => handlePermissionChange("chat", e.target.checked)}>Chat</Checkbox>
                 </VStack>
               </FormControl>
