@@ -59,6 +59,14 @@ export default function SubCategoryManager() {
     try {
       let iconUrl = form.iconUrl;
       if (iconFile) {
+        if (selectedSubCategory && selectedSubCategory.iconUrl) {
+          try {
+            const oldIconRef = ref(storage, selectedSubCategory.iconUrl);
+            await deleteObject(oldIconRef);
+          } catch (err) {
+            console.error("Error deleting old icon:", err);
+          }
+        }
         try {
           const iconRef = ref(storage, `sub-category-icons/${Date.now()}_${iconFile.name}`);
           await uploadBytes(iconRef, iconFile);
@@ -133,7 +141,10 @@ export default function SubCategoryManager() {
     {
         Header: "Main Category",
         accessor: "mainCategoryId",
-        Cell: ({ value }) => categories.find(c => c.id === value)?.name || value,
+        Cell: ({ value }) => {
+          const category = categories.find(c => c.id === value);
+          return category ? category.name : "Not Assigned";
+        },
         Filter: () => null,
     },
     {

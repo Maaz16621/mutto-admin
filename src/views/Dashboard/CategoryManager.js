@@ -20,7 +20,6 @@ export default function CategoryManager() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  // Fetch categories
   const fetchCategories = async () => {
     setLoading(true);
     try {
@@ -38,7 +37,6 @@ export default function CategoryManager() {
     fetchCategories();
   }, []);
 
-  // Add or update category
   const handleSave = async () => {
     if (!form.name) {
       toast({ title: "Category name required", status: "warning", position: "top-right" });
@@ -48,6 +46,14 @@ export default function CategoryManager() {
     try {
       let iconUrl = form.iconUrl;
       if (iconFile) {
+        if (selectedCategory && selectedCategory.iconUrl) {
+          try {
+            const oldIconRef = ref(storage, selectedCategory.iconUrl);
+            await deleteObject(oldIconRef);
+          } catch (err) {
+            console.error("Error deleting old icon:", err);
+          }
+        }
         try {
           const iconRef = ref(storage, `category-icons/${Date.now()}_${iconFile.name}`);
           await uploadBytes(iconRef, iconFile);
@@ -66,7 +72,6 @@ export default function CategoryManager() {
         }
       }
       if (selectedCategory) {
-        // Edit category
         await updateDoc(doc(firestore, "categories", selectedCategory.id), {
           name: form.name,
           description: form.description,
@@ -74,8 +79,7 @@ export default function CategoryManager() {
         });
         toast({ title: "Category updated", position: "top-right" });
       } else {
-        // Add category with Firestore auto-generated unique ID
-        const docRef = await setDoc(doc(collection(firestore, "categories")), {
+        await setDoc(doc(collection(firestore, "categories")), {
           name: form.name,
           description: form.description,
           iconUrl,
@@ -94,7 +98,6 @@ export default function CategoryManager() {
     setLoading(false);
   };
 
-  // Open modal for add/edit
   const openEdit = (category) => {
     setSelectedCategory(category);
     setForm(category
@@ -109,7 +112,6 @@ export default function CategoryManager() {
     onOpen();
   };
 
-  // DataTable columns
   const columns = useMemo(() => [
     {
       Header: "Icon",
@@ -156,23 +158,19 @@ export default function CategoryManager() {
     },
   ], []);
 
-  // Delete category (with icon)
   const handleDelete = async () => {
     const category = deleteModal.category;
     if (!category) return;
     setLoading(true);
     try {
-      // Delete icon from storage if exists
       if (category.iconUrl) {
         try {
           const iconRef = ref(storage, category.iconUrl);
           await deleteObject(iconRef);
         } catch (err) {
-          // Ignore storage error, show toast
           toast({ title: "Warning", description: "Could not delete icon from storage.", status: "warning", position: "top-right" });
         }
       }
-      // Delete Firestore doc
       await import("firebase/firestore").then(({ deleteDoc, doc }) => deleteDoc(doc(firestore, "categories", category.id)));
       toast({ title: "Category deleted", status: "success", position: "top-right" });
       fetchCategories();
@@ -183,7 +181,6 @@ export default function CategoryManager() {
     setLoading(false);
   };
 
-  // Filtering logic
   const filteredData = useMemo(() => {
     let data = categories;
     if (globalFilter) {
@@ -196,7 +193,7 @@ export default function CategoryManager() {
     return data;
   }, [categories, globalFilter]);
 
-  const {
+  const { 
     getTableProps,
     getTableBodyProps,
     headerGroups,
@@ -225,13 +222,11 @@ export default function CategoryManager() {
     usePagination
   );
 
-  // Sync search input with react-table
   useEffect(() => {
     setTableGlobalFilter(globalFilter);
   }, [globalFilter, setTableGlobalFilter]);
 
   return (
-    
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
       <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="0px">
         <CardHeader p="6px 0px 22px 0px">
@@ -256,7 +251,6 @@ export default function CategoryManager() {
                 boxShadow="sm"
               />
             </InputGroup>
-            {/* No status filter needed */}
           </Flex>
           {loading && <Flex justify="center" align="center" minH="100px"><Spinner size="lg" /></Flex>}
           {!loading && (
@@ -287,7 +281,6 @@ export default function CategoryManager() {
               </Tbody>
             </Table>
           )}
-          {/* Pagination Controls */}
           {!loading && pageOptions.length > 1 && (
             <Flex mt={4} align="center" justify="flex-end" gap={2} flexWrap="wrap">
               <Button size="sm" onClick={() => gotoPage(0)} disabled={!canPreviousPage}>&lt;&lt;</Button>
@@ -326,30 +319,15 @@ export default function CategoryManager() {
               </Flex>
             )}
             <FormControl mb={3} isRequired>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Name
-                <Tooltip label="The name of the category (e.g., Wash, Detailing)." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
+              <FormLabel>Name</FormLabel>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Description
-                <Tooltip label="A short description of the category." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
+              <FormLabel>Description</FormLabel>
               <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
-              <FormLabel display="flex" alignItems="center" gap={1}>
-                Icon Image
-                <Tooltip label="Upload an icon image for this category (optional)." placement="right" hasArrow>
-                  <span><Icon viewBox="0 0 20 20" color="gray.400" boxSize={4}><path fill="currentColor" d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14.5A6.5 6.5 0 1 0 10 17.5 6.5 6.5 0 0 0 10 3.5zm.75 10.25h-1.5v-1.5h1.5v1.5zm0-2.75h-1.5V7h1.5v4z"/></Icon></span>
-                </Tooltip>
-              </FormLabel>
+              <FormLabel>Icon Image</FormLabel>
               <Input type="file" accept="image/*" onChange={e => setIconFile(e.target.files[0])} />
               {form.iconUrl && !iconFile && (
                 <Box mt={2}><img src={form.iconUrl} alt="icon" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} /></Box>
@@ -385,5 +363,3 @@ export default function CategoryManager() {
     </Flex>
   );
 }
-
-

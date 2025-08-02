@@ -243,12 +243,18 @@ export default function ProductManager() {
     {
       Header: "Category",
       accessor: "categoryId",
-      Cell: ({ value }) => categories.find(cat => cat.id === value)?.name || "-",
+      Cell: ({ value }) => {
+        const category = categories.find(cat => cat.id === value);
+        return category ? category.name : "Not Assigned";
+      },
     },
     {
       Header: "Sub-Category",
       accessor: "subCategoryId",
-      Cell: ({ value }) => subCategories.find(subCat => subCat.id === value)?.name || "-",
+      Cell: ({ value }) => {
+        const subCategory = subCategories.find(subCat => subCat.id === value);
+        return subCategory ? subCategory.name : "Not Assigned";
+      },
     },
     { Header: "Cost", accessor: "cost" },
     { Header: "Time (min)", accessor: "time" },

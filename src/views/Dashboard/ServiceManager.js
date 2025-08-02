@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { InputGroup, InputLeftElement, Textarea } from "@chakra-ui/react";
-import { SearchIcon, AddIcon, CloseIcon } from "@chakra-ui/icons";
+import { SearchIcon, AddIcon, CloseIcon, StarIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
@@ -63,6 +63,7 @@ export default function ServiceManager() {
     bufferTime: "",
     active: true,
     imageUrls: [],
+    mainImageUrl: "",
     relatedServices: []
   });
   const [includedItem, setIncludedItem] = useState("");
@@ -99,6 +100,20 @@ export default function ServiceManager() {
     fetchServices();
   }, []);
 
+  const handleImageRemove = (index) => {
+    const newImagePreviews = [...imagePreviews];
+    newImagePreviews.splice(index, 1);
+    setImagePreviews(newImagePreviews);
+
+    const newImageFiles = [...imageFiles];
+    newImageFiles.splice(index, 1);
+    setImageFiles(newImageFiles);
+  };
+
+  const handleSetMainImage = (url) => {
+    setForm(f => ({ ...f, mainImageUrl: url }));
+  };
+
   const handleSave = async () => {
     if (!form.name || !form.subCategoryId || !form.cost || !form.duration) {
       toast({ title: "Name, Sub-Category, Cost, and Duration are required", status: "warning" });
@@ -106,6 +121,16 @@ export default function ServiceManager() {
     }
     setLoading(true);
     let imageUrls = form.imageUrls || [];
+
+    if (selectedService && selectedService.imageUrls && imageFiles.length > 0) {
+      const deletePromises = selectedService.imageUrls.map(url => {
+        const imageRef = ref(storage, url);
+        return deleteObject(imageRef);
+      });
+      await Promise.all(deletePromises);
+      imageUrls = [];
+    }
+
     try {
       if (imageFiles.length > 0) {
         const uploadPromises = imageFiles.map(file => {
@@ -129,6 +154,12 @@ export default function ServiceManager() {
         const newImageUrls = await Promise.all(uploadPromises);
         imageUrls = [...imageUrls, ...newImageUrls];
       }
+
+      let mainImageUrl = form.mainImageUrl;
+      if (!mainImageUrl && imageUrls.length > 0) {
+        mainImageUrl = imageUrls[0];
+      }
+
       const data = {
         name: form.name,
         description: form.description,
@@ -141,6 +172,7 @@ export default function ServiceManager() {
         bufferTime: form.bufferTime ? Number(form.bufferTime) : 0,
         active: !!form.active,
         imageUrls: imageUrls,
+        mainImageUrl: mainImageUrl,
         updatedAt: serverTimestamp(),
         relatedServices: form.relatedServices || [],
       };
@@ -156,7 +188,7 @@ export default function ServiceManager() {
       }
       fetchServices();
       onClose();
-      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], relatedServices: [] });
+      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], mainImageUrl: "", relatedServices: [] });
       setImageFiles([]);
       setImagePreviews([]);
       setUploadProgress(0);
@@ -182,9 +214,10 @@ export default function ServiceManager() {
           bufferTime: service.bufferTime || "",
           active: service.active !== undefined ? service.active : true,
           imageUrls: service.imageUrls || [],
+          mainImageUrl: service.mainImageUrl || "",
           relatedServices: service.relatedServices || [],
         }
-      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], relatedServices: [] }
+      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], mainImageUrl: "", relatedServices: [] }
     );
     setImageFiles([]);
     setImagePreviews(service && service.imageUrls ? service.imageUrls : []);
@@ -218,14 +251,17 @@ export default function ServiceManager() {
   const columns = useMemo(() => [
     {
       Header: "Image",
-      accessor: "imageUrls",
-      Cell: ({ value }) => (value && value.length > 0 ? <img src={value[0]} alt="service" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-"),
+      accessor: "mainImageUrl",
+      Cell: ({ value, row }) => {
+        const src = value || (row.original.imageUrls && row.original.imageUrls[0]);
+        return src ? <img src={src} alt="service" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} /> : "-";
+      },
       disableSortBy: true,
     },
     { Header: "Name", accessor: "name" },
     { Header: "Sub-Category", accessor: "subCategoryId", Cell: ({ value }) => {
       const category = subCategories.find(c => c.id === value);
-      return category ? category.name : (value || "-");
+      return category ? category.name : "Not Assigned";
     }},
     { Header: "Cost", accessor: "cost" },
     { Header: "Duration (min)", accessor: "duration" },
@@ -424,8 +460,19 @@ export default function ServiceManager() {
                           <img
                             src={preview}
                             alt={`Service Image Preview ${index + 1}`}
-                            style={{ maxWidth: "60px", maxHeight: "60px", borderRadius: 8, border: "1px solid #eee" }}
+                            style={{ maxWidth: "60px", maxHeight: "60px", borderRadius: 8, border: form.mainImageUrl === preview ? "2px solid orange" : "1px solid #eee" }}
                           />
+                          <IconButton
+                            icon={<CloseIcon />}
+                            size="xs"
+                            position="absolute"
+                            top="-5px"
+                            right="-5px"
+                            onClick={() => handleImageRemove(index)}
+                          />
+                          <Button size="xs" position="absolute" bottom="-5px" right="-5px" onClick={() => handleSetMainImage(preview)}>
+                            <StarIcon color={form.mainImageUrl === preview ? "yellow.400" : "gray.300"} />
+                          </Button>
                         </Box>
                       ))}
                     </Flex>
