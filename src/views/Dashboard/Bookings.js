@@ -8,8 +8,10 @@ import { firestore } from "../../firebase";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody.js";
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyCj-gMHtSUc7TG4nHLfzTcckVYR0kWiJAk";
+const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 const calculateDistance = (coords1, coords2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -27,7 +29,23 @@ const calculateDistance = (coords1, coords2) => {
   return d;
 };
 
-const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails) => {
+const formatTimeToAMPM = (hour, minute) => {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${formattedHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
+};
+
+const containerStyle = {
+  width: '100%',
+  height: '300px'
+};
+
+const center = {
+  lat: 25.2048,
+  lng: 55.2708
+};
+
+const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails, existingBookings = []) => {
   const slots = [];
   const dayOfWeek = new Date(date).toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
 
@@ -60,20 +78,49 @@ const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails)
   let currentHour = startHour;
   let currentMinute = startMinute;
 
+  const parseTimeStrToMinutes = (timeStr) => {
+    const [time, period] = timeStr.split(' ');
+    let [h, m] = time.split(':').map(Number);
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0; // Midnight
+    return h * 60 + m;
+  };
+
   while (currentHour * 60 + currentMinute < endHour * 60 + endMinute) {
-    const slotStart = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-    
+    const slotStartHour = currentHour;
+    const slotStartMinute = currentMinute;
+
     currentMinute += totalDuration;
-    if (currentMinute >= 60) {
-      currentHour += Math.floor(currentMinute / 60);
-      currentMinute %= 60;
+    let slotEndHour = currentHour;
+    let slotEndMinute = currentMinute;
+
+    if (slotEndMinute >= 60) {
+      slotEndHour += Math.floor(slotEndMinute / 60);
+      slotEndMinute %= 60;
     }
 
-    const slotEnd = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+    // Check if the potential slot overlaps with any existing booking
+    const isOverlapping = existingBookings.some(booking => {
+      const [bookingStartTimeStr, bookingEndTimeStr] = booking.selectedTime.split(' to ');
+      const existingBookingStartInMinutes = parseTimeStrToMinutes(bookingStartTimeStr);
+      const existingBookingEndInMinutes = parseTimeStrToMinutes(bookingEndTimeStr);
 
-    if (currentHour * 60 + currentMinute <= endHour * 60 + endMinute) {
-      slots.push(`${slotStart} to ${slotEnd}`);
+      const potentialSlotStartInMinutes = slotStartHour * 60 + slotStartMinute;
+      const potentialSlotEndInMinutes = slotEndHour * 60 + slotEndMinute;
+
+      // Overlap condition: (start1 < end2) && (end1 > start2)
+      return (
+        potentialSlotStartInMinutes < existingBookingEndInMinutes &&
+        potentialSlotEndInMinutes > existingBookingStartInMinutes
+      );
+    });
+
+    if (!isOverlapping && (slotEndHour * 60 + slotEndMinute <= endHour * 60 + endMinute)) {
+      slots.push(`${formatTimeToAMPM(slotStartHour, slotStartMinute)} to ${formatTimeToAMPM(slotEndHour, slotEndMinute)}`);
     }
+
+    currentHour = slotEndHour;
+    currentMinute = slotEndMinute;
   }
   return slots;
 };
@@ -106,11 +153,42 @@ export default function Bookings() {
     selectedDate: '',
     selectedTime: '',
   });
-
-  const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
+ 
+  const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCloseOriginal } = useDisclosure();
+  const onCreateClose = () => {
+    onCloseOriginal();
+    setNewBooking({
+      user: null,
+      phone: '',
+      email: '',
+      address: '',
+      addressCoordinates: null,
+      service: null,
+      selectedWorker: null,
+      vehicle: '',
+      addons: [],
+      paymentMethod: 'cash',
+      selectedDate: '',
+      selectedTime: '',
+    });
+    setSelectedSavedAddressId('');
+    setCurrentFormStep(1);
+    setUserSearchTerm('');
+  };
   const addressInputRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  const mapContainerRef = useRef(null); // New ref for the map container
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
+  const [currentFormStep, setCurrentFormStep] = useState(1);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: ['places', 'geometry'],
+  });
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -197,21 +275,6 @@ export default function Bookings() {
     fetchInitialData();
   }, []);
 
-  useEffect(() => {
-    if (isCreateOpen && window.google && window.google.maps && window.google.maps.places && addressInputRef.current) {
-      const autocomplete = new window.google.maps.places.Autocomplete(addressInputRef.current, { types: ['address'] });
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place.geometry && place.geometry.location) {
-          setNewBooking(prev => ({
-            ...prev,
-            address: place.formatted_address,
-            addressCoordinates: { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() },
-          }));
-        }
-      });
-    }
-  }, [isCreateOpen]);
 
   const viewDisclosure = useDisclosure();
   const isViewOpen = viewDisclosure.isOpen;
@@ -377,10 +440,14 @@ export default function Bookings() {
 
   const userAddresses = useMemo(() => {
     if (newBooking.user && newBooking.user.addresses) {
-      return Object.keys(newBooking.user.addresses).map(key => ({ id: key, ...newBooking.user.addresses[key] }));
+      if (Array.isArray(newBooking.user.addresses)) {
+        return newBooking.user.addresses.map(addr => ({ id: addr.id, ...addr }));
+      } else if (typeof newBooking.user.addresses === 'object' && newBooking.user.addresses !== null) {
+        return Object.keys(newBooking.user.addresses).map(key => ({ id: key, ...newBooking.user.addresses[key] }));
+      }
     }
     return [];
-  }, [newBooking.user]);
+  }, [newBooking.user?.addresses]);
 
   const userVehicles = useMemo(() => {
     if (newBooking.user && newBooking.user.vehicles) {
@@ -391,13 +458,21 @@ export default function Bookings() {
 
   const availableTimeSlots = useMemo(() => {
     if (!newBooking.selectedDate || !newBooking.selectedWorker || !newBooking.service || !appSettings) return [];
+
+    const workerBookingsOnSelectedDate = bookings.filter(booking =>
+      booking.workerId === newBooking.selectedWorker.id &&
+      booking.selectedDate === newBooking.selectedDate &&
+      (booking.status === 'pending' || booking.status === 'confirmed')
+    );
+
     return generateTimeSlots(
       newBooking.selectedDate,
       appSettings,
       newBooking.selectedWorker,
-      newBooking.service
+      newBooking.service,
+      workerBookingsOnSelectedDate
     );
-  }, [newBooking.selectedDate, newBooking.selectedWorker, newBooking.service, appSettings]);
+  }, [newBooking.selectedDate, newBooking.selectedWorker, newBooking.service, appSettings, bookings]);
 
   const filteredUsers = useMemo(() => {
     if (!userSearchTerm) return [];
@@ -406,9 +481,8 @@ export default function Bookings() {
     );
   }, [userSearchTerm, users]);
 
-  const handleUserSelect = (user) => {
+  const handleUserSelect = async (user) => {
     setNewBooking(prev => {
-      const defaultAddressObj = user.defaultAddress ? Object.values(user.addresses || {}).find(addr => addr.id === user.defaultAddress) : null;
       const defaultVehicleObj = user.defaultVehicle ? Object.values(user.vehicles || {}).find(veh => veh.id === user.defaultVehicle) : null;
 
       return {
@@ -416,13 +490,30 @@ export default function Bookings() {
         user,
         phone: user?.phone || '',
         email: user?.email || '',
-        address: defaultAddressObj?.address || '',
-        addressCoordinates: defaultAddressObj ? { lat: defaultAddressObj.latitude, lng: defaultAddressObj.longitude } : null,
+        address: '',
+        addressCoordinates: null,
         vehicle: defaultVehicleObj?.name || '',
       };
     });
     setUserSearchTerm(user.username);
     setShowUserSuggestions(false);
+    setSelectedSavedAddressId('');
+
+    // Fetch addresses for the selected user
+    try {
+      const addressesSnapshot = await getDocs(collection(firestore, "users", user.id, "addresses"));
+      const fetchedAddresses = addressesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setNewBooking(prev => ({
+        ...prev,
+        user: {
+          ...prev.user,
+          addresses: fetchedAddresses
+        }
+      }));
+    } catch (error) {
+      console.error("Error fetching user addresses:", error);
+      toast({ title: "Error fetching user addresses", status: "error", description: error.message });
+    }
   };
 
   const handleAddressSelect = (addressObj) => {
@@ -563,121 +654,215 @@ export default function Bookings() {
             <ModalHeader>Create Booking</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              <FormControl>
-                <FormLabel>User</FormLabel>
-                <Input
-                  placeholder="Search or enter user name"
-                  value={userSearchTerm}
-                  onChange={(e) => {
-                    setUserSearchTerm(e.target.value);
-                    setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, vehicle: '' })); // Clear selected user and related fields if typing
-                    setShowUserSuggestions(true);
-                  }}
-                  onFocus={() => setShowUserSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowUserSuggestions(false), 100)}
-                />
-                {showUserSuggestions && filteredUsers.length > 0 && (
-                  <Box border="1px" borderColor="gray.200" borderRadius="md" mt={1} position="absolute" zIndex="10" bg="white" width="calc(100% - 2rem)">
-                    <List spacing={1}>
-                      {filteredUsers.map(user => (
-                        <ListItem
-                          key={user.id}
-                          p={2}
-                          _hover={{ bg: "gray.100", cursor: "pointer" }}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleUserSelect(user)}
-                        >
-                          {user.username}
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                )}
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Phone</FormLabel>
-                <Input value={newBooking.phone} onChange={(e) => setNewBooking({ ...newBooking, phone: e.target.value })} isDisabled={!!newBooking.user} />
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Email</FormLabel>
-                <Input value={newBooking.email} onChange={(e) => setNewBooking({ ...newBooking, email: e.target.value })} isDisabled={!!newBooking.user} />
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Address</FormLabel>
-                <Input ref={addressInputRef} placeholder="Enter address" value={newBooking.address} onChange={(e) => setNewBooking({ ...newBooking, address: e.target.value, addressCoordinates: null })} />
-                {newBooking.user && userAddresses.length > 0 && (
-                  <Select placeholder="Select saved address" mt={2} value={newBooking.address} onChange={(e) => {
-                    const selectedAddress = userAddresses.find(addr => addr.address === e.target.value);
-                    handleAddressSelect(selectedAddress);
-                  }}>
-                    {userAddresses.map(addr => <option key={addr.id} value={addr.address}>{addr.name}: {addr.address}</option>)}
-                  </Select>
-                )}
-                {newBooking.addressCoordinates && (
-                  <Box mt={2}>
-                    <img
-                      src={`https://maps.googleapis.com/maps/api/staticmap?center=${newBooking.addressCoordinates.lat},${newBooking.addressCoordinates.lng}&zoom=14&size=300x200&markers=color:red%7C${newBooking.addressCoordinates.lat},${newBooking.addressCoordinates.lng}&key=${GOOGLE_MAPS_API_KEY}`}
-                      alt="Map of selected address"
-                      style={{ maxWidth: "100%", height: "auto" }}
+              {currentFormStep === 1 && (
+                <>
+                  <FormControl>
+                    <FormLabel>User</FormLabel>
+                    <Input
+                      placeholder="Search or enter user name"
+                      value={userSearchTerm}
+                      onChange={(e) => {
+                        setUserSearchTerm(e.target.value);
+                        setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, vehicle: '' })); // Clear selected user and related fields if typing
+                        setShowUserSuggestions(true);
+                      }}
+                      onFocus={() => setShowUserSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowUserSuggestions(false), 100)}
                     />
-                  </Box>
-                )}
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Service</FormLabel>
-                <Select placeholder="Select service" onChange={(e) => setNewBooking({ ...newBooking, service: services.find(s => s.id === e.target.value) })}>
-                  {availableServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
-                </Select>
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Date</FormLabel>
-                <Input
-                  type="date"
-                  value={newBooking.selectedDate}
-                  onChange={(e) => setNewBooking({ ...newBooking, selectedDate: e.target.value })}
-                />
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Time</FormLabel>
-                <Select
-                  placeholder="Select time slot"
-                  value={newBooking.selectedTime}
-                  onChange={(e) => setNewBooking({ ...newBooking, selectedTime: e.target.value })}
-                >
-                  {availableTimeSlots.map((slot) => (
-                    <option key={slot} value={slot}>
-                      {slot}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Vehicle</FormLabel>
-                {newBooking.user && userVehicles.length > 0 ? (
-                  <Select placeholder="Select vehicle" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })}>
-                    {userVehicles.map(vehicle => <option key={vehicle.id} value={vehicle.name}>{vehicle.name}</option>)}
-                  </Select>
-                ) : (
-                  <Input placeholder="Enter vehicle details" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })} />
-                )}
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Addons</FormLabel>
-                <CheckboxGroup onChange={(values) => setNewBooking({ ...newBooking, addons: values })}>
-                  <Stack direction="column">
-                    {availableAddons.map(addon => <Checkbox key={addon.id} value={addon.id}>{addon.name}</Checkbox>)}
-                  </Stack>
-                </CheckboxGroup>
-              </FormControl>
-              <FormControl mt={4}>
-                <FormLabel>Payment Method</FormLabel>
-                <Input value={newBooking.paymentMethod} isReadOnly />
-              </FormControl>
+                    {showUserSuggestions && filteredUsers.length > 0 && (
+                      <Box border="1px" borderColor="gray.200" borderRadius="md" mt={1} position="absolute" zIndex="10" bg="white" width="calc(100% - 2rem)">
+                        <List spacing={1}>
+                          {filteredUsers.map(user => (
+                            <ListItem
+                              key={user.id}
+                              p={2}
+                              _hover={{ bg: "gray.100", cursor: "pointer" }}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleUserSelect(user)}
+                            >
+                              {user.username}
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Box>
+                    )}
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Phone</FormLabel>
+                    <Input value={newBooking.phone} onChange={(e) => setNewBooking({ ...newBooking, phone: e.target.value })} isDisabled={!!newBooking.user} />
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Email</FormLabel>
+                    <Input value={newBooking.email} onChange={(e) => setNewBooking({ ...newBooking, email: e.target.value })} isDisabled={!!newBooking.user} />
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Address</FormLabel>
+                    {(newBooking.user && userAddresses.length > 0) || selectedSavedAddressId === 'new_address' ? (
+                      <Select placeholder="Select saved address" mt={2} value={selectedSavedAddressId} onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setSelectedSavedAddressId(selectedId);
+                        if (selectedId === 'new_address') {
+                          setNewBooking(prev => ({ ...prev, address: '', addressCoordinates: null }));
+                        } else {
+                          const selectedAddress = userAddresses.find(addr => addr.id === selectedId);
+                          handleAddressSelect(selectedAddress);
+                        }
+                      }}>
+                        {userAddresses.map(addr => <option key={addr.id} value={addr.id}>{addr.name}: {addr.address}</option>)}
+                        <option value="new_address">Add New Address</option>
+                      </Select>
+                    ) : null}
+                    {(!newBooking.user || userAddresses.length === 0 || selectedSavedAddressId === 'new_address') && isLoaded && (
+                      <GooglePlacesAutocomplete
+                        apiKey={GOOGLE_MAPS_API_KEY}
+                        selectProps={{
+                          placeholder: "Enter address",
+                          value: newBooking.address ? { label: newBooking.address, value: newBooking.address } : null,
+                          onChange: (selected) => {
+                            if (selected) {
+                              setNewBooking(prev => ({ ...prev, address: selected.label }));
+                              geocodeByAddress(selected.label)
+                                .then(results => getLatLng(results[0]))
+                                .then(({ lat, lng }) => {
+                                  const newPosition = { lat, lng };
+                                  setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
+                                  if (mapRef.current) {
+                                    mapRef.current.panTo(newPosition);
+                                    mapRef.current.setZoom(16);
+                                  }
+                                })
+                                .catch(error => console.error('Error', error));
+                            } else {
+                              setNewBooking(prev => ({ ...prev, address: '', addressCoordinates: null }));
+                            }
+                          },
+                          styles: {
+                            container: (provided) => ({ ...provided, marginTop: '8px' }),
+                          },
+                        }}
+                        autocompletionRequest={{
+                          componentRestrictions: { country: ['ae'] },
+                        }}
+                      />
+                    )}
+                    <Box mt={2} style={containerStyle}>
+                      {isLoaded && (
+                        <GoogleMap
+                          mapContainerStyle={containerStyle}
+                          center={newBooking.addressCoordinates || center}
+                          zoom={14}
+                          onLoad={map => mapRef.current = map}
+                          onUnmount={() => mapRef.current = null}
+                          onClick={(e) => {
+                            const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                            setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
+                            const geocoder = new window.google.maps.Geocoder();
+                            geocoder.geocode({ location: e.latLng }, (results, status) => {
+                              if (status === 'OK' && results[0]) {
+                                setNewBooking(prev => ({ ...prev, address: results[0].formatted_address }));
+                              }
+                            });
+                          }}
+                        >
+                          {newBooking.addressCoordinates && (
+                            <Marker
+                              position={newBooking.addressCoordinates}
+                              draggable={true}
+                              onDragEnd={(e) => {
+                                const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                                setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
+                                const geocoder = new window.google.maps.Geocoder();
+                                geocoder.geocode({ location: e.latLng }, (results, status) => {
+                                  if (status === 'OK' && results[0]) {
+                                    setNewBooking(prev => ({ ...prev, address: results[0].formatted_address }));
+                                  }
+                                });
+                              }}
+                            />
+                          )}
+                        </GoogleMap>
+                      )}
+                    </Box>
+                    
+                  </FormControl>
+                </>
+              )}
+              {currentFormStep === 2 && (
+                <>
+                  <FormControl mt={4}>
+                    <FormLabel>Service</FormLabel>
+                    <Select placeholder="Select service" onChange={(e) => setNewBooking({ ...newBooking, service: services.find(s => s.id === e.target.value) })}>
+                      {availableServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
+                    </Select>
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={newBooking.selectedDate}
+                      onChange={(e) => setNewBooking({ ...newBooking, selectedDate: e.target.value })}
+                    />
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Time</FormLabel>
+                    <Select
+                      placeholder="Select time slot"
+                      value={newBooking.selectedTime}
+                      onChange={(e) => setNewBooking({ ...newBooking, selectedTime: e.target.value })}
+                    >
+                      {availableTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Vehicle</FormLabel>
+                    {newBooking.user && userVehicles.length > 0 ? (
+                      <Select placeholder="Select vehicle" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })}>
+                        {userVehicles.map(vehicle => <option key={vehicle.id} value={vehicle.name}>{vehicle.name}</option>)}
+                      </Select>
+                    ) : (
+                      <Input placeholder="Enter vehicle details" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })} />
+                    )}
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Addons</FormLabel>
+                    <CheckboxGroup onChange={(values) => setNewBooking({ ...newBooking, addons: values })}>
+                      <Stack direction="column">
+                        {availableAddons.map(addon => <Checkbox key={addon.id} value={addon.id}>{addon.name}</Checkbox>)}
+                      </Stack>
+                    </CheckboxGroup>
+                  </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Payment Method</FormLabel>
+                    <Input value={newBooking.paymentMethod} isReadOnly />
+                  </FormControl>
+                </>
+              )}
             </ModalBody>
             <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={handleSave} isLoading={loading}>
-                Save
-              </Button>
+              {currentFormStep === 1 && (
+                <Button
+                  colorScheme="blue"
+                  mr={3}
+                  onClick={() => newBooking.addressCoordinates && setCurrentFormStep(2)}
+                  isDisabled={!newBooking.addressCoordinates}
+                >
+                  Next
+                </Button>
+              )}
+              {currentFormStep === 2 && (
+                <>
+                  <Button variant="ghost" mr={3} onClick={() => setCurrentFormStep(1)}>
+                    Back
+                  </Button>
+                  <Button colorScheme="blue" mr={3} onClick={handleSave} isLoading={loading}>
+                    Save
+                  </Button>
+                </>
+              )}
               <Button variant="ghost" onClick={onCreateClose}>Cancel</Button>
             </ModalFooter>
           </ModalContent>
