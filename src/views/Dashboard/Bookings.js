@@ -1,21 +1,22 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef, forwardRef } from "react";
 import { Text, Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Tag, Menu, MenuButton, MenuList, MenuItem, CheckboxGroup, Checkbox, Stack, List, ListItem } from "@chakra-ui/react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
 import { SearchIcon } from "@chakra-ui/icons";
-import { collection, getDocs, getDoc, updateDoc, doc, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, getDoc, updateDoc, doc, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { firestore } from "../../firebase";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody.js";
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
-
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';                                                          
+import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';    
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 const calculateDistance = (coords1, coords2) => {
   const toRad = (x) => (x * Math.PI) / 180;
-  const R = 6371; // Earth radius in km
+  const R = 6371000; // Earth radius in meters
 
   const dLat = toRad(coords2.lat - coords1.lat);
   const dLon = toRad(coords2.lng - coords1.lng);
@@ -28,6 +29,25 @@ const calculateDistance = (coords1, coords2) => {
   const d = R * c;
   return d;
 };
+
+const CustomDatePickerInput = forwardRef(({
+  value,
+  onClick,
+  onChange,
+  placeholder
+}, ref) => (
+  <Input
+    onClick={onClick}
+    value={value}
+    onChange={onChange}
+    ref={ref}
+    placeholder={placeholder}
+    size="sm"
+    bg="white"
+    borderRadius="md"
+    boxShadow="sm"
+  />
+));
 
 const formatTimeToAMPM = (hour, minute) => {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -86,9 +106,28 @@ const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails,
     return h * 60 + m;
   };
 
+  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const currentHourUAE = parseInt(now.toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Dubai' }));
+  const currentMinuteUAE = parseInt(now.toLocaleString('en-US', { minute: '2-digit', timeZone: 'Asia/Dubai' }));
+
   while (currentHour * 60 + currentMinute < endHour * 60 + endMinute) {
     const slotStartHour = currentHour;
     const slotStartMinute = currentMinute;
+
+    // Check if the selected date is today and if the slot start time has already passed
+    if (date === today) {
+      const slotStartInMinutes = slotStartHour * 60 + slotStartMinute;
+      const currentInMinutesUAE = currentHourUAE * 60 + currentMinuteUAE;
+      if (slotStartInMinutes <= currentInMinutesUAE) {
+        currentMinute += totalDuration; // Move to the next slot
+        if (currentMinute >= 60) {
+          currentHour += Math.floor(currentMinute / 60);
+          currentMinute %= 60;
+        }
+        continue; // Skip this slot and proceed to the next iteration
+      }
+    }
 
     currentMinute += totalDuration;
     let slotEndHour = currentHour;
@@ -109,10 +148,11 @@ const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails,
       const potentialSlotEndInMinutes = slotEndHour * 60 + slotEndMinute;
 
       // Overlap condition: (start1 < end2) && (end1 > start2)
-      return (
+      const overlap = (
         potentialSlotStartInMinutes < existingBookingEndInMinutes &&
         potentialSlotEndInMinutes > existingBookingStartInMinutes
       );
+      return overlap;
     });
 
     if (!isOverlapping && (slotEndHour * 60 + slotEndMinute <= endHour * 60 + endMinute)) {
@@ -143,17 +183,17 @@ export default function Bookings() {
     user: null,
     phone: '',
     email: '',
-    address: '',
-    addressCoordinates: null,
+    selectedAddress: {},
     service: null,
     selectedWorker: null,
-    vehicle: '',
+    selectedVehicle: {},
     addons: [],
     paymentMethod: 'cash',
     selectedDate: '',
     selectedTime: '',
   });
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
+  const [selectedSavedVehicleId, setSelectedSavedVehicleId] = useState('');
  
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCloseOriginal } = useDisclosure();
   const onCreateClose = () => {
@@ -162,17 +202,17 @@ export default function Bookings() {
       user: null,
       phone: '',
       email: '',
-      address: '',
-      addressCoordinates: null,
+      selectedAddress: {},
       service: null,
       selectedWorker: null,
-      vehicle: '',
+      selectedVehicle: {},
       addons: [],
       paymentMethod: 'cash',
       selectedDate: '',
       selectedTime: '',
     });
     setSelectedSavedAddressId('');
+    setSelectedSavedVehicleId('');
     setCurrentFormStep(1);
     setUserSearchTerm('');
   };
@@ -302,19 +342,18 @@ export default function Bookings() {
         customerName: newBooking.user?.username || userSearchTerm, // Use userSearchTerm for new users
         phone: newBooking.phone,
         email: newBooking.email,
-        address: newBooking.address,
-        addressCoordinates: newBooking.addressCoordinates,
+        selectedAddress: newBooking.selectedAddress,
         serviceId: newBooking.service?.id || null,
         serviceName: newBooking.service?.name || null,
         workerId: newBooking.selectedWorker?.id || null,
         workerName: newBooking.selectedWorker?.userName || null,
-        vehicle: newBooking.vehicle,
+        selectedVehicle: newBooking.selectedVehicle, // Changed from vehicle to selectedVehicle
         addons: newBooking.addons,
         paymentMethod: newBooking.paymentMethod,
         selectedDate: newBooking.selectedDate,
         selectedTime: newBooking.selectedTime,
         createdAt: serverTimestamp(),
-        status: 'pending',
+        status: 'confirmed',
       });
       toast({ title: "Booking created", status: "success" });
       fetchBookings();
@@ -390,7 +429,7 @@ export default function Bookings() {
   }, [globalFilter, setTableGlobalFilter]);
 
   const eligibleWorkersForServiceAndLocation = useMemo(() => {
-    if (!newBooking.service || !newBooking.addressCoordinates) return [];
+    if (!newBooking.service || !newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) return [];
 
     const serviceId = newBooking.service.id;
 
@@ -405,10 +444,10 @@ export default function Bookings() {
         return false;
       }
       const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
-      const distance = calculateDistance(workerCoords, newBooking.addressCoordinates);
+      const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
       return distance <= worker.serviceArea.properties.radius;
     });
-  }, [newBooking.service, newBooking.addressCoordinates, workers]);
+  }, [newBooking.service, newBooking.selectedAddress, workers]);
 
   useEffect(() => {
     if (eligibleWorkersForServiceAndLocation.length > 0) {
@@ -419,17 +458,25 @@ export default function Bookings() {
   }, [eligibleWorkersForServiceAndLocation]);
 
   const availableServices = useMemo(() => {
-    if (!newBooking.addressCoordinates) return [];
+    if (!newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) {
+      return [];
+    }
 
-    const serviceIdsFromWorkers = workers.filter(worker => {
-      if (!worker.serviceArea || !worker.serviceArea.geometry || !worker.serviceArea.geometry.coordinates) return false;
-      const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
-      const distance = calculateDistance(workerCoords, newBooking.addressCoordinates);
-      return distance <= worker.serviceArea.properties.radius;
-    }).flatMap(worker => worker.assignedServices);
-
-    return services.filter(service => serviceIdsFromWorkers.includes(service.id));
-  }, [newBooking.addressCoordinates, workers, services]);
+    const eligibleWorkerServiceIds = new Set();
+    workers.forEach(worker => {
+      if (worker.serviceArea && worker.serviceArea.geometry && worker.serviceArea.geometry.coordinates && worker.serviceArea.properties && worker.serviceArea.properties.radius) {
+        const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
+        const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
+        if (distance <= worker.serviceArea.properties.radius) {
+          if (Array.isArray(worker.assignedServices)) {
+            worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
+          }
+        }
+      }
+    });
+    const filtered = services.filter(service => eligibleWorkerServiceIds.has(service.id));
+    return filtered;
+  }, [newBooking.selectedAddress, workers, services]);
 
   const availableAddons = useMemo(() => {
     if (!newBooking.service) return [];
@@ -451,7 +498,11 @@ export default function Bookings() {
 
   const userVehicles = useMemo(() => {
     if (newBooking.user && newBooking.user.vehicles) {
-      return Object.values(newBooking.user.vehicles);
+      const vehiclesArray = (Array.isArray(newBooking.user.vehicles) ? newBooking.user.vehicles : Object.values(newBooking.user.vehicles)).map(vehicle => ({
+        ...vehicle,
+        name: `${vehicle.company || ''} ${vehicle.model || ''} (${vehicle.modelYear || ''})`.trim()
+      }));
+      return vehiclesArray;
     }
     return [];
   }, [newBooking.user]);
@@ -482,50 +533,64 @@ export default function Bookings() {
   }, [userSearchTerm, users]);
 
   const handleUserSelect = async (user) => {
-    setNewBooking(prev => {
-      const defaultVehicleObj = user.defaultVehicle ? Object.values(user.vehicles || {}).find(veh => veh.id === user.defaultVehicle) : null;
+    const defaultVehicleObj = user.defaultVehicle ? Object.values(user.vehicles || {}).find(veh => veh.id === user.defaultVehicle) : null;
 
-      return {
-        ...prev,
-        user,
-        phone: user?.phone || '',
-        email: user?.email || '',
-        address: '',
-        addressCoordinates: null,
-        vehicle: defaultVehicleObj?.name || '',
-      };
-    });
+    setNewBooking(prev => ({
+      ...prev,
+      user,
+      phone: user?.phone || '',
+      email: user?.email || '',
+      selectedAddress: {},
+      selectedVehicle: defaultVehicleObj || {},
+    }));
     setUserSearchTerm(user.username);
     setShowUserSuggestions(false);
     setSelectedSavedAddressId('');
+    setSelectedSavedVehicleId(user.defaultVehicle || ''); // Set default vehicle ID
 
-    // Fetch addresses for the selected user
+    // Fetch addresses and vehicles for the selected user
     try {
-      const addressesSnapshot = await getDocs(collection(firestore, "users", user.id, "addresses"));
+      const [addressesSnapshot, vehiclesQuerySnapshot] = await Promise.all([
+        getDocs(collection(firestore, "users", user.id, "addresses")),
+        getDocs(query(collection(firestore, "vehicles"), where("userId", "==", user.id)))
+      ]);
+
       const fetchedAddresses = addressesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setNewBooking(prev => ({
-        ...prev,
-        user: {
-          ...prev.user,
-          addresses: fetchedAddresses
-        }
-      }));
+      const fetchedVehicles = vehiclesQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      setNewBooking(prev => {
+        const updatedBooking = {
+          ...prev,
+          user: {
+            ...prev.user,
+            addresses: fetchedAddresses,
+            vehicles: fetchedVehicles,
+          }
+        };
+        return updatedBooking;
+      });
     } catch (error) {
-      console.error("Error fetching user addresses:", error);
-      toast({ title: "Error fetching user addresses", status: "error", description: error.message });
+      console.error("Error fetching user data:", error);
+      toast({ title: "Error fetching user data", status: "error", description: error.message });
     }
   };
 
   const handleAddressSelect = (addressObj) => {
     setNewBooking(prev => ({
       ...prev,
-      address: addressObj.address,
-      addressCoordinates: { lat: addressObj.latitude, lng: addressObj.longitude },
+      selectedAddress: addressObj,
     }));
   };
 
   return (
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
+      <style>
+        {`
+          .react-datepicker-wrapper {
+            width: 100%;
+          }
+        `}
+      </style>
       <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="0px">
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
@@ -663,7 +728,7 @@ export default function Bookings() {
                       value={userSearchTerm}
                       onChange={(e) => {
                         setUserSearchTerm(e.target.value);
-                        setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, vehicle: '' })); // Clear selected user and related fields if typing
+                        setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, selectedVehicle: '' })); // Clear selected user and related fields if typing
                         setShowUserSuggestions(true);
                       }}
                       onFocus={() => setShowUserSuggestions(true)}
@@ -717,15 +782,24 @@ export default function Bookings() {
                         apiKey={GOOGLE_MAPS_API_KEY}
                         selectProps={{
                           placeholder: "Enter address",
-                          value: newBooking.address ? { label: newBooking.address, value: newBooking.address } : null,
+                          value: newBooking.selectedAddress.address ? { label: newBooking.selectedAddress.address, value: newBooking.selectedAddress.address } : null,
                           onChange: (selected) => {
                             if (selected) {
-                              setNewBooking(prev => ({ ...prev, address: selected.label }));
                               geocodeByAddress(selected.label)
                                 .then(results => getLatLng(results[0]))
                                 .then(({ lat, lng }) => {
                                   const newPosition = { lat, lng };
-                                  setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
+                                  setNewBooking(prev => ({
+                                    ...prev,
+                                    selectedAddress: {
+                                      id: `temp-${Date.now()}`,
+                                      address: selected.label,
+                                      latitude: lat,
+                                      longitude: lng,
+                                      name: "New Address", // Default name for new address
+                                      type: "Others", // Default type for new address
+                                    },
+                                  }));
                                   if (mapRef.current) {
                                     mapRef.current.panTo(newPosition);
                                     mapRef.current.setZoom(16);
@@ -733,7 +807,7 @@ export default function Bookings() {
                                 })
                                 .catch(error => console.error('Error', error));
                             } else {
-                              setNewBooking(prev => ({ ...prev, address: '', addressCoordinates: null }));
+                              setNewBooking(prev => ({ ...prev, selectedAddress: {} }));
                             }
                           },
                           styles: {
@@ -746,43 +820,61 @@ export default function Bookings() {
                       />
                     )}
                     <Box mt={2} style={containerStyle}>
-                      {isLoaded && (
-                        <GoogleMap
-                          mapContainerStyle={containerStyle}
-                          center={newBooking.addressCoordinates || center}
-                          zoom={14}
-                          onLoad={map => mapRef.current = map}
-                          onUnmount={() => mapRef.current = null}
-                          onClick={(e) => {
-                            const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-                            setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
-                            const geocoder = new window.google.maps.Geocoder();
-                            geocoder.geocode({ location: e.latLng }, (results, status) => {
-                              if (status === 'OK' && results[0]) {
-                                setNewBooking(prev => ({ ...prev, address: results[0].formatted_address }));
-                              }
-                            });
-                          }}
-                        >
-                          {newBooking.addressCoordinates && (
-                            <Marker
-                              position={newBooking.addressCoordinates}
-                              draggable={true}
-                              onDragEnd={(e) => {
-                                const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-                                setNewBooking(prev => ({ ...prev, addressCoordinates: newPosition }));
-                                const geocoder = new window.google.maps.Geocoder();
-                                geocoder.geocode({ location: e.latLng }, (results, status) => {
-                                  if (status === 'OK' && results[0]) {
-                                    setNewBooking(prev => ({ ...prev, address: results[0].formatted_address }));
-                                  }
-                                });
-                              }}
-                            />
-                          )}
-                        </GoogleMap>
-                      )}
-                    </Box>
+                        {isLoaded && (
+                          <GoogleMap
+                            mapContainerStyle={containerStyle}
+                            center={newBooking.selectedAddress.latitude && newBooking.selectedAddress.longitude ? { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude } : center}
+                            zoom={14}
+                            onLoad={map => mapRef.current = map}
+                            onUnmount={() => mapRef.current = null}
+                            onClick={(e) => {
+                              const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                              const geocoder = new window.google.maps.Geocoder();
+                              geocoder.geocode({ location: e.latLng }, (results, status) => {
+                                if (status === 'OK' && results[0]) {
+                                  setNewBooking(prev => ({
+                                    ...prev,
+                                    selectedAddress: {
+                                      id: `temp-${Date.now()}`,
+                                      address: results[0].formatted_address,
+                                      latitude: newPosition.lat,
+                                      longitude: newPosition.lng,
+                                      name: "New Address", // Default name for new address
+                                      type: "Others", // Default type for new address
+                                    },
+                                  }));
+                                }
+                              });
+                            }}
+                          >
+                            {newBooking.selectedAddress.latitude && newBooking.selectedAddress.longitude && (
+                              <Marker
+                                position={{ lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude }}
+                                draggable={true}
+                                onDragEnd={(e) => {
+                                  const newPosition = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                                  const geocoder = new window.google.maps.Geocoder();
+                                  geocoder.geocode({ location: e.latLng }, (results, status) => {
+                                    if (status === 'OK' && results[0]) {
+                                      setNewBooking(prev => ({
+                                        ...prev,
+                                        selectedAddress: {
+                                          id: `temp-${Date.now()}`,
+                                          address: results[0].formatted_address,
+                                          latitude: newPosition.lat,
+                                          longitude: newPosition.lng,
+                                          name: "New Address", // Default name for new address
+                                          type: "Others", // Default type for new address
+                                        },
+                                      }));
+                                    }
+                                  });
+                                }}
+                              />
+                            )}
+                          </GoogleMap>
+                        )}
+                      </Box>
                     
                   </FormControl>
                 </>
@@ -795,36 +887,85 @@ export default function Bookings() {
                       {availableServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
                     </Select>
                   </FormControl>
-                  <FormControl mt={4}>
+                  <FormControl mt={4} w="100%">
                     <FormLabel>Date</FormLabel>
-                    <Input
-                      type="date"
-                      value={newBooking.selectedDate}
-                      onChange={(e) => setNewBooking({ ...newBooking, selectedDate: e.target.value })}
-                    />
+                    <DatePicker
+                        selected={newBooking.selectedDate ? new Date(newBooking.selectedDate) : null}
+                        onChange={(date) => setNewBooking({ ...newBooking, selectedDate: date ? date.toISOString().split('T')[0] : '' })}
+                        dateFormat="yyyy-MM-dd"
+                        minDate={new Date()}
+                        excludeDates={[
+                          ...(appSettings?.offDates || []).map(dateString => new Date(dateString)),
+                          ...(newBooking.selectedWorker?.offDates || []).map(dateString => new Date(dateString))
+                        ]}
+                        placeholderText="Select a date"
+                        customInput={<CustomDatePickerInput />}
+                      />
                   </FormControl>
                   <FormControl mt={4}>
                     <FormLabel>Time</FormLabel>
-                    <Select
-                      placeholder="Select time slot"
-                      value={newBooking.selectedTime}
-                      onChange={(e) => setNewBooking({ ...newBooking, selectedTime: e.target.value })}
-                    >
-                      {availableTimeSlots.map((slot) => (
-                        <option key={slot} value={slot}>
-                          {slot}
-                        </option>
-                      ))}
-                    </Select>
+                    {newBooking.selectedDate && newBooking.selectedWorker && newBooking.service && appSettings && (
+                      availableTimeSlots.length > 0 ? (
+                        <Select
+                          placeholder="Select time slot"
+                          value={newBooking.selectedTime}
+                          onChange={(e) => setNewBooking({ ...newBooking, selectedTime: e.target.value })}
+                        >
+                          {availableTimeSlots.map((slot) => (
+                            <option key={slot} value={slot}>
+                              {slot}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Text color="red.500" fontSize="sm">No time slots available for the selected date. This might be a company or worker off-date, or all slots are booked.</Text>
+                      )
+                    )}
                   </FormControl>
                   <FormControl mt={4}>
                     <FormLabel>Vehicle</FormLabel>
-                    {newBooking.user && userVehicles.length > 0 ? (
-                      <Select placeholder="Select vehicle" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })}>
-                        {userVehicles.map(vehicle => <option key={vehicle.id} value={vehicle.name}>{vehicle.name}</option>)}
+                    {newBooking.user && userVehicles.length > 0 && (
+                      <Select placeholder="Select saved vehicle" mt={2} value={selectedSavedVehicleId} onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setSelectedSavedVehicleId(selectedId);
+                        if (selectedId === 'new_vehicle') {
+                          setNewBooking(prev => ({ ...prev, selectedVehicle: {} })); // Set to empty object for new vehicle
+                        } else {
+                          const vehicle = userVehicles.find(veh => veh.id === selectedId);
+                          setNewBooking(prev => ({ ...prev, selectedVehicle: vehicle || {} })); // Set entire vehicle object
+                        }
+                      }}>
+                        {userVehicles.map(vehicle => <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}
+                        <option value="new_vehicle">Add New Vehicle</option>
                       </Select>
-                    ) : (
-                      <Input placeholder="Enter vehicle details" value={newBooking.vehicle} onChange={(e) => setNewBooking({ ...newBooking, vehicle: e.target.value })} />
+                    )}
+                    {(!newBooking.user || userVehicles.length === 0 || selectedSavedVehicleId === 'new_vehicle') && (
+                      <Box mt={newBooking.user && userVehicles.length > 0 ? 2 : 0}>
+                        <FormControl mt={2}>
+                          <FormLabel>Company</FormLabel>
+                          <Input value={newBooking.selectedVehicle.company || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, company: e.target.value } }))} placeholder="e.g., Toyota" />
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel>Model</FormLabel>
+                          <Input value={newBooking.selectedVehicle.model || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, model: e.target.value } }))} placeholder="e.g., Camry" />
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel>Year</FormLabel>
+                          <Input value={newBooking.selectedVehicle.modelYear || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, modelYear: e.target.value } }))} placeholder="e.g., 2020" />
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel>Color</FormLabel>
+                          <Input value={newBooking.selectedVehicle.color || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, color: e.target.value } }))} placeholder="e.g., Black" />
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel>Plate Number Part 1</FormLabel>
+                          <Input value={newBooking.selectedVehicle.plateNumberPart1 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, plateNumberPart1: e.target.value } }))} placeholder="e.g., A" />
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel>Plate Number Part 2</FormLabel>
+                          <Input value={newBooking.selectedVehicle.plateNumberPart2 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, plateNumberPart2: e.target.value } }))} placeholder="e.g., 12345" />
+                        </FormControl>
+                      </Box>
                     )}
                   </FormControl>
                   <FormControl mt={4}>
@@ -842,13 +983,14 @@ export default function Bookings() {
                 </>
               )}
             </ModalBody>
-            <ModalFooter>
+         
+          <ModalFooter>
               {currentFormStep === 1 && (
                 <Button
                   colorScheme="blue"
                   mr={3}
-                  onClick={() => newBooking.addressCoordinates && setCurrentFormStep(2)}
-                  isDisabled={!newBooking.addressCoordinates}
+                  onClick={() => newBooking.selectedAddress.latitude && newBooking.selectedAddress.longitude && setCurrentFormStep(2)}
+                  isDisabled={!(newBooking.selectedAddress.latitude && newBooking.selectedAddress.longitude)}
                 >
                   Next
                 </Button>

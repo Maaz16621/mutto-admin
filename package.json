@@ -33,6 +33,7 @@
 		"react-big-calendar": "0.33.2",
 		"react-bootstrap-sweetalert": "5.2.0",
 		"react-custom-scrollbars": "^4.2.1",
+		"react-datepicker": "^8.4.0",
 		"react-datetime": "3.0.4",
 		"react-dom": "^18.0.0",
 		"react-github-btn": "^1.2.1",
