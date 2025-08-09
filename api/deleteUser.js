@@ -6,6 +6,9 @@ const router = express.Router();
 
 // POST /api/deleteUser { uid: string }
 router.post('/deleteUser', async (req, res) => {
+  if (admin.apps.length === 0) {
+    return res.status(500).json({ error: 'Firebase Admin SDK not initialized. Check server logs for the original error.' });
+  }
   const { uid } = req.body;
   if (!uid) {
     return res.status(400).json({ error: 'Missing uid' });

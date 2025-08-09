@@ -13,7 +13,7 @@ import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 
-const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:5001' : 'https://api.yourdomain.com';
+const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
 export default function StaffManagement() {
   console.log("StaffManagement component rendering...");
   const [deleteModal, setDeleteModal] = useState({ open: false, staff: null });
