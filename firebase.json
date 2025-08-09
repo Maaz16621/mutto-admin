@@ -9,7 +9,6 @@
     "rewrites": [
       {
         "source": "api",
-        "secretEnvironmentVariables": ["FIREBASE_SERVICE_ACCOUNT"],
         "app": {
           "backendId": "mutto-api",
           "region": "us-central1"
