@@ -1,5 +1,5 @@
+
+# API dependencies
+api/node_modules
 node_modules
-package-lock.json
-build
-api
-.env
+api/mutto-84d97-firebase-adminsdk-fbsvc-6baf4caccd.json

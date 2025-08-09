@@ -939,7 +939,7 @@ export default function Bookings() {
                         <option value="new_vehicle">Add New Vehicle</option>
                       </Select>
                     )}
-                    {(!newBooking.user || userVehicles.length === 0 || selectedSavedVehicleId === 'new_vehicle') && (
+                    {(!newBooking.user || selectedSavedVehicleId === 'new_vehicle') && (
                       <Box mt={newBooking.user && userVehicles.length > 0 ? 2 : 0}>
                         <FormControl mt={2}>
                           <FormLabel>Company</FormLabel>

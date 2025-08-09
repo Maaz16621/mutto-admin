@@ -1,0 +1,17 @@
+{
+  "name": "mutto-api",
+  "version": "1.0.0",
+  "description": "API for Mutto Car Wash",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "firebase-admin": "^11.10.1"
+  },
+  "author": "",
+  "license": "ISC"
+}
