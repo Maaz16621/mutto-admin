@@ -3,77 +3,65 @@ addons
 
 
 createdAt
-August 5, 2025 at 7:35:57 PM UTC+5
+August 19, 2025 at 8:44:10 PM UTC+5
 (timestamp)
 
 
+customerName
+"usama"
+(string)
 
-selectedAddress
+
+email
+"maazhanif1997@gmail.com"
+(string)
+
+
+paymentMethod
+"cash"
+(string)
+
+
+phone
+"03365219622"
+(string)
+
+
 (map)
-
-
-address
-"House no. 468 Snober City, Palm Avenue, Rawalpindi, Pakistan"
-(string)
-
-
-
-createdAt
-(map)
-
-
-nanoseconds
-830000000
-(number)
-
-
-seconds
-1754212352
-(number)
-
-
-type
-"firestore/timestamp/1.0"
-(string)
-
-
-id
-"y5ImWOviET0Igve80Wok"
-(string)
-
-
-latitude
-33.5194037
-(number)
-
-
-longitude
-73.0473291
-(number)
-
-
-name
-"Home 2"
-(string)
-
-
-type
-"Others"
-(string)
 
 
 selectedDate
-"2025-08-10"
+"2025-08-27"
 (string)
 
 
 selectedTime
-"1:00 PM to 2:00 PM"
+"10:10 AM to 11:20 AM"
 (string)
 
 
+serviceId
+"76cVchb5etsrLo72uKVd"
+(string)
 
-selectedVehicle
+
+serviceName
+"Hydraulic Car Wash"
+(string)
+
+
+status
+"confirmed"
+(string)
+
+
+userId
+null
+(null)
+
+
+
+vehicle
 (map)
 
 
@@ -87,38 +75,13 @@ company
 (string)
 
 
-
-createdAt
-(map)
-
-
-nanoseconds
-276000000
-(number)
-
-
-seconds
-1754317652
-(number)
-
-
-type
-"firestore/timestamp/1.0"
-(string)
-
-
-id
-"JCa6BMbE9BE54hdQEROn"
-(string)
-
-
 model
-"Prado"
+"Corolla"
 (string)
 
 
 modelYear
-"2019"
+"2017"
 (string)
 
 
@@ -128,29 +91,14 @@ plateNumberPart1
 
 
 plateNumberPart2
-"123"
-(string)
-
-
-userId
-"tWoGRt0qjSR4VqEmSUCGkw2OMDd2"
-(string)
-
-
-serviceId
-"76cVchb5etsrLo72uKVd"
-(string)
-
-
-status
-"confirmed"
-(string)
-
-
-userId
-"tWoGRt0qjSR4VqEmSUCGkw2OMDd2"
+"1234"
 (string)
 
 
 workerId
-"ezfNCm8k74M7oj80QYZejMTTcaT2"
+"t7kaAmIXMkTqFFzPUNYmqobfxRj1"
+(string)
+
+
+workerName
+"worker1"

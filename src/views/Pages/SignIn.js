@@ -82,7 +82,7 @@ function SignIn() {
         setLoading(false);
         return;
       }
-      await updateDoc(staffDocRef, { lastLogin: serverTimestamp() });
+      await updateDoc(staffDocRef, { lastLogin: serverTimestamp(), isOnline: true });
       localStorage.setItem("user", JSON.stringify({ uid: user.uid, email: user.email, role: staffSnap.data().role }));
       toast({ title: "Login successful!", status: "success", duration: 3000, isClosable: true, position: "top-right" });
       history.push("/admin/dashboard");

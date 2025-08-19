@@ -186,7 +186,7 @@ export default function Bookings() {
     selectedAddress: {},
     service: null,
     selectedWorker: null,
-    selectedVehicle: {},
+    vehicle: {},
     addons: [],
     paymentMethod: 'cash',
     selectedDate: '',
@@ -205,7 +205,7 @@ export default function Bookings() {
       selectedAddress: {},
       service: null,
       selectedWorker: null,
-      selectedVehicle: {},
+      vehicle: {},
       addons: [],
       paymentMethod: 'cash',
       selectedDate: '',
@@ -236,35 +236,43 @@ export default function Bookings() {
       const querySnapshot = await getDocs(collection(firestore, "bookings"));
       const bookingsList = await Promise.all(querySnapshot.docs.map(async (bookingDoc) => {
         const booking = { id: bookingDoc.id, ...bookingDoc.data() };
-        if (!booking.userId || !booking.serviceId || !booking.workerId) {
-            return {
-                ...booking,
-                customerName: 'N/A',
-                serviceName: 'N/A',
-                workerName: 'N/A',
-                userDetails: {},
-                serviceDetails: {},
-                workerDetails: {},
-            }
-        }
-        const userDocRef = doc(firestore, "users", booking.userId);
-        const serviceDocRef = doc(firestore, "services", booking.serviceId);
-        const workerDocRef = doc(firestore, "workers", booking.workerId);
 
-        const [userDoc, serviceDoc, workerDoc] = await Promise.all([
-            getDoc(userDocRef),
-            getDoc(serviceDocRef),
-            getDoc(workerDocRef)
-        ]);
+        let customerName = booking.customerName || 'N/A';
+        let serviceName = booking.serviceName || 'N/A';
+        let workerName = booking.workerName || 'N/A';
+        let userDetails = {};
+        let serviceDetails = {};
+        let workerDetails = {};
+
+        if (booking.userId) {
+            const userDocRef = doc(firestore, "users", booking.userId);
+            const userDoc = await getDoc(userDocRef);
+            userDetails = userDoc.data() || {};
+            customerName = userDetails.username || customerName;
+        }
+
+        if (booking.serviceId) {
+            const serviceDocRef = doc(firestore, "services", booking.serviceId);
+            const serviceDoc = await getDoc(serviceDocRef);
+            serviceDetails = serviceDoc.data() || {};
+            serviceName = serviceDetails.name || serviceName;
+        }
+
+        if (booking.workerId) {
+            const workerDocRef = doc(firestore, "workers", booking.workerId);
+            const workerDoc = await getDoc(workerDocRef);
+            workerDetails = workerDoc.data() || {};
+            workerName = workerDetails.userName || workerName;
+        }
 
         return {
           ...booking,
-          customerName: userDoc.data()?.username || 'N/A',
-          serviceName: serviceDoc.data()?.name || 'N/A',
-          workerName: workerDoc.data()?.userName || 'N/A',
-          userDetails: userDoc.data(),
-          serviceDetails: serviceDoc.data(),
-          workerDetails: workerDoc.data(),
+          customerName,
+          serviceName,
+          workerName,
+          userDetails,
+          serviceDetails,
+          workerDetails,
         };
       }));
       setBookings(bookingsList);
@@ -347,7 +355,7 @@ export default function Bookings() {
         serviceName: newBooking.service?.name || null,
         workerId: newBooking.selectedWorker?.id || null,
         workerName: newBooking.selectedWorker?.userName || null,
-        selectedVehicle: newBooking.selectedVehicle, // Changed from vehicle to selectedVehicle
+        vehicle: newBooking.vehicle, // Changed from vehicle to selectedVehicle
         addons: newBooking.addons,
         paymentMethod: newBooking.paymentMethod,
         selectedDate: newBooking.selectedDate,
@@ -458,25 +466,37 @@ export default function Bookings() {
   }, [eligibleWorkersForServiceAndLocation]);
 
   const availableServices = useMemo(() => {
-    if (!newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) {
+    if (!newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude || !isLoaded) {
       return [];
     }
 
     const eligibleWorkerServiceIds = new Set();
+    const customerLatLng = new window.google.maps.LatLng(newBooking.selectedAddress.latitude, newBooking.selectedAddress.longitude);
+
     workers.forEach(worker => {
-      if (worker.serviceArea && worker.serviceArea.geometry && worker.serviceArea.geometry.coordinates && worker.serviceArea.properties && worker.serviceArea.properties.radius) {
-        const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
-        const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
-        if (distance <= worker.serviceArea.properties.radius) {
-          if (Array.isArray(worker.assignedServices)) {
-            worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
+      if (worker.serviceArea && worker.serviceArea.geometry && worker.serviceArea.geometry.coordinates) {
+        if (worker.serviceArea.geometry.type === 'Point' && worker.serviceArea.properties && worker.serviceArea.properties.radius) {
+          const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
+          const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
+          if (distance <= worker.serviceArea.properties.radius) {
+            if (Array.isArray(worker.assignedServices)) {
+              worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
+            }
+          }
+        } else if (worker.serviceArea.geometry.type === 'Polygon') {
+          const polygonCoords = worker.serviceArea.geometry.coordinates.map(p => new window.google.maps.LatLng(p.lat, p.lng));
+          const polygon = new window.google.maps.Polygon({ paths: polygonCoords });
+          if (window.google.maps.geometry.poly.containsLocation(customerLatLng, polygon)) {
+            if (Array.isArray(worker.assignedServices)) {
+              worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
+            }
           }
         }
       }
     });
     const filtered = services.filter(service => eligibleWorkerServiceIds.has(service.id));
     return filtered;
-  }, [newBooking.selectedAddress, workers, services]);
+  }, [newBooking.selectedAddress, workers, services, isLoaded]);
 
   const availableAddons = useMemo(() => {
     if (!newBooking.service) return [];
@@ -541,7 +561,7 @@ export default function Bookings() {
       phone: user?.phone || '',
       email: user?.email || '',
       selectedAddress: {},
-      selectedVehicle: defaultVehicleObj || {},
+      vehicle: defaultVehicleObj || {},
     }));
     setUserSearchTerm(user.username);
     setShowUserSuggestions(false);
@@ -664,15 +684,15 @@ export default function Bookings() {
             <ModalBody>
               <Box>
                 <Heading size="md">User Details</Heading>
-                <Text>Name: {viewBooking.userDetails?.username}</Text>
-                <Text>Email: {viewBooking.userDetails?.email}</Text>
+                <Text>Name: {viewBooking.userDetails?.username || viewBooking.customerName}</Text>
+                <Text>Email: {viewBooking.userDetails?.email || viewBooking.email}</Text>
 
                 <Heading size="md" mt={4}>Vehicle Details</Heading>
-                <Text>Company: {viewBooking.selectedVehicle?.company}</Text>
-                <Text>Model: {viewBooking.selectedVehicle?.model}</Text>
-                <Text>Year: {viewBooking.selectedVehicle?.modelYear}</Text>
-                <Text>Color: {viewBooking.selectedVehicle?.color}</Text>
-                <Text>Plate: {viewBooking.selectedVehicle?.plateNumberPart1}-{viewBooking.selectedVehicle?.plateNumberPart2}</Text>
+                <Text>Company: {viewBooking.vehicle?.company}</Text>
+                <Text>Model: {viewBooking.vehicle?.model}</Text>
+                <Text>Year: {viewBooking.vehicle?.modelYear}</Text>
+                <Text>Color: {viewBooking.vehicle?.color}</Text>
+                <Text>Plate: {viewBooking.vehicle?.plateNumberPart1}-{viewBooking.vehicle?.plateNumberPart2}</Text>
 
                 <Heading size="md" mt={4}>Address Details</Heading>
                 <Text>Name: {viewBooking.selectedAddress?.name}</Text>
@@ -728,7 +748,7 @@ export default function Bookings() {
                       value={userSearchTerm}
                       onChange={(e) => {
                         setUserSearchTerm(e.target.value);
-                        setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, selectedVehicle: '' })); // Clear selected user and related fields if typing
+                        setNewBooking(prev => ({ ...prev, user: null, phone: '', email: '', address: '', addressCoordinates: null, vehicle: '' })); // Clear selected user and related fields if typing
                         setShowUserSuggestions(true);
                       }}
                       onFocus={() => setShowUserSuggestions(true)}
@@ -929,10 +949,10 @@ export default function Bookings() {
                         const selectedId = e.target.value;
                         setSelectedSavedVehicleId(selectedId);
                         if (selectedId === 'new_vehicle') {
-                          setNewBooking(prev => ({ ...prev, selectedVehicle: {} })); // Set to empty object for new vehicle
+                          setNewBooking(prev => ({ ...prev, vehicle: {} })); // Set to empty object for new vehicle
                         } else {
                           const vehicle = userVehicles.find(veh => veh.id === selectedId);
-                          setNewBooking(prev => ({ ...prev, selectedVehicle: vehicle || {} })); // Set entire vehicle object
+                          setNewBooking(prev => ({ ...prev, vehicle: vehicle || {} })); // Set entire vehicle object
                         }
                       }}>
                         {userVehicles.map(vehicle => <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}
@@ -943,27 +963,27 @@ export default function Bookings() {
                       <Box mt={newBooking.user && userVehicles.length > 0 ? 2 : 0}>
                         <FormControl mt={2}>
                           <FormLabel>Company</FormLabel>
-                          <Input value={newBooking.selectedVehicle.company || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, company: e.target.value } }))} placeholder="e.g., Toyota" />
+                          <Input value={newBooking.vehicle.company || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, company: e.target.value } }))} placeholder="e.g., Toyota" />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel>Model</FormLabel>
-                          <Input value={newBooking.selectedVehicle.model || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, model: e.target.value } }))} placeholder="e.g., Camry" />
+                          <Input value={newBooking.vehicle.model || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, model: e.target.value } }))} placeholder="e.g., Camry" />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel>Year</FormLabel>
-                          <Input value={newBooking.selectedVehicle.modelYear || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, modelYear: e.target.value } }))} placeholder="e.g., 2020" />
+                          <Input value={newBooking.vehicle.modelYear || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, modelYear: e.target.value } }))} placeholder="e.g., 2020" />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel>Color</FormLabel>
-                          <Input value={newBooking.selectedVehicle.color || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, color: e.target.value } }))} placeholder="e.g., Black" />
+                          <Input value={newBooking.vehicle.color || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, color: e.target.value } }))} placeholder="e.g., Black" />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel>Plate Number Part 1</FormLabel>
-                          <Input value={newBooking.selectedVehicle.plateNumberPart1 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, plateNumberPart1: e.target.value } }))} placeholder="e.g., A" />
+                          <Input value={newBooking.vehicle.plateNumberPart1 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, plateNumberPart1: e.target.value } }))} placeholder="e.g., A" />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel>Plate Number Part 2</FormLabel>
-                          <Input value={newBooking.selectedVehicle.plateNumberPart2 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, selectedVehicle: { ...prev.selectedVehicle, plateNumberPart2: e.target.value } }))} placeholder="e.g., 12345" />
+                          <Input value={newBooking.vehicle.plateNumberPart2 || ''} onChange={(e) => setNewBooking(prev => ({ ...prev, vehicle: { ...prev.vehicle, plateNumberPart2: e.target.value } }))} placeholder="e.g., 12345" />
                         </FormControl>
                       </Box>
                     )}

@@ -9,7 +9,9 @@ import {
 import React, { useState, useEffect } from "react";
 import { Redirect, Route, Switch, useHistory } from "react-router-dom";
 import { Portal, useDisclosure, Box, useColorMode, Spinner, Flex } from "@chakra-ui/react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { auth } from "../firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { firestore } from "../firebase"; // Adjust path as needed
 
 import Footer from "components/Footer/Footer.js";
@@ -57,6 +59,8 @@ export default function Dashboard(props) {
         if (staffDocSnap.exists()) {
           const staffData = staffDocSnap.data();
           fetchedPermissions = staffData.permissions || [];
+          // Set isOnline to true when user is logged in and visiting
+          await updateDoc(staffDocRef, { isOnline: true });
         }
         setUserPermissions(fetchedPermissions);
 
@@ -87,6 +91,24 @@ export default function Dashboard(props) {
     };
 
     fetchPermissionsAndHandleRedirect();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // User logged out, set isOnline to false
+        const localUser = JSON.parse(localStorage.getItem("user"));
+        if (localUser && localUser.uid) {
+          const staffDocRef = doc(firestore, "staff", localUser.uid);
+          const staffDocSnap = await getDoc(staffDocRef);
+          if (staffDocSnap.exists()) {
+            await updateDoc(staffDocRef, { isOnline: false });
+          }
+        }
+        localStorage.removeItem("user");
+        history.push("/auth/signin");
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup subscription on unmount
   }, [history]); // Removed hasPermission from dependency array
 
   const getRoute = () => {

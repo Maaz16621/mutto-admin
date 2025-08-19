@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Switch, Tag, TagLabel, TagCloseButton, SimpleGrid, VStack, Menu, MenuButton, MenuList, MenuItem, Checkbox, Text } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
-import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
@@ -15,6 +15,18 @@ import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
+
+function ChangeView({ center, zoom, bounds }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds);
+    } else {
+      map.setView(center, zoom);
+    }
+  }, [center, zoom, bounds, map]);
+  return null;
+}
 
 export default function WorkerManagement() {
   const [deleteModal, setDeleteModal] = useState({ open: false, worker: null });
@@ -39,6 +51,8 @@ export default function WorkerManagement() {
   const [serviceArea, setServiceArea] = useState(null);
   const [companySettings, setCompanySettings] = useState(null);
   const [newOffDate, setNewOffDate] = useState("");
+  const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
+  const [mapBounds, setMapBounds] = useState(null);
 
   const openLocationModal = (worker) => {
     setSelectedWorkerForLocation(worker);
@@ -61,14 +75,32 @@ export default function WorkerManagement() {
   const openMapModal = (worker) => {
     setSelectedWorkerForArea(worker);
     if (worker.serviceArea) {
-      let areaToDisplay = { ...worker.serviceArea };
-      // Convert polygon coordinates back to the format Leaflet expects
-      if (areaToDisplay.geometry.type === 'Polygon') {
-        areaToDisplay.geometry.coordinates = [areaToDisplay.geometry.coordinates.map(p => [p.lng, p.lat])];
+      let area = JSON.parse(JSON.stringify(worker.serviceArea));
+      if (area.geometry.type === 'Polygon') {
+        const leafletCoords = area.geometry.coordinates.map(p => [p.lat, p.lng]);
+        area.geometry.coordinates = [leafletCoords];
+        if (leafletCoords.length > 0) {
+          setMapBounds(leafletCoords);
+        }
+      } else if (area.geometry.type === 'Point') {
+        const centerLat = area.geometry.coordinates[1];
+        const centerLng = area.geometry.coordinates[0];
+        const radius = area.properties.radius; // in meters
+        const earthCircumference = 40075000; // in meters
+        const latitudeRadians = centerLat * (Math.PI / 180);
+        const metersPerDegreeLat = earthCircumference / 360;
+        const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
+        const radiusInLatDegrees = radius / metersPerDegreeLat;
+        const radiusInLngDegrees = radius / metersPerDegreeLng;
+
+        const southWest = [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees];
+        const northEast = [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees];
+        setMapBounds([southWest, northEast]);
       }
-      setServiceArea(areaToDisplay);
+      setServiceArea(area);
     } else {
       setServiceArea(null);
+      setMapBounds(null);
     }
     setMapModalOpen(true);
   };
@@ -77,6 +109,8 @@ export default function WorkerManagement() {
     setMapModalOpen(false);
     setSelectedWorkerForArea(null);
     setServiceArea(null);
+    setMapCenter([24.3506, 53.9396]); // Reset to default
+    setMapBounds(null);
   };
 
   const handleSaveArea = async () => {
@@ -87,7 +121,7 @@ export default function WorkerManagement() {
 
     // Convert polygon coordinates to a Firestore-compatible format
     if (areaToSave.geometry.type === 'Polygon') {
-      areaToSave.geometry.coordinates = areaToSave.geometry.coordinates[0].map(p => ({ lat: p[1], lng: p[0] }));
+      areaToSave.geometry.coordinates = areaToSave.geometry.coordinates[0].map(p => ({ lat: p[0], lng: p[1] }));
     }
 
     setLoading(true);
@@ -105,9 +139,11 @@ export default function WorkerManagement() {
   const onCreated = (e) => {
     const { layerType, layer } = e;
     const shape = layer.toGeoJSON();
-    // For circles, leaflet-draw doesn't store radius in GeoJSON, so we add it manually.
     if (layerType === 'circle') {
       shape.properties.radius = layer.getRadius();
+    }
+    if (shape.geometry.type === 'Polygon') {
+      shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
     }
     setServiceArea(shape);
   };
@@ -115,9 +151,11 @@ export default function WorkerManagement() {
   const onEdited = (e) => {
     e.layers.eachLayer(layer => {
       const shape = layer.toGeoJSON();
-      // For circles, we need to manually add the radius as it's not in the GeoJSON.
       if (layer.getRadius) {
         shape.properties.radius = layer.getRadius();
+      }
+      if (shape.geometry.type === 'Polygon') {
+        shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
       }
       setServiceArea(shape);
     });
@@ -468,7 +506,8 @@ export default function WorkerManagement() {
             <ModalBody p={0} h="100%">
               <VStack h="100%" spacing={0}>
                 <Box flexGrow={1} w="100%">
-                  <MapContainer center={[24.3506, 53.9396]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                  <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+                    <ChangeView center={mapCenter} zoom={13} bounds={mapBounds} />
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -487,7 +526,7 @@ export default function WorkerManagement() {
                         }}
                       />
                       {serviceArea && serviceArea.geometry.type === 'Polygon' && (
-                        <Polygon positions={serviceArea.geometry.coordinates[0].map(p => [p[1], p[0]])} />
+                        <Polygon positions={serviceArea.geometry.coordinates[0]} />
                       )}
                       {serviceArea && serviceArea.geometry.type === 'Point' && (
                         <Circle center={[serviceArea.geometry.coordinates[1], serviceArea.geometry.coordinates[0]]} radius={serviceArea.properties.radius} />
