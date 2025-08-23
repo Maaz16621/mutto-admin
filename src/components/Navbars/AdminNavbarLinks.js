@@ -19,7 +19,7 @@ import avatar3 from "assets/img/avatars/avatar3.png";
 import { ProfileIcon, SettingsIcon } from "components/Icons/Icons";
 import { FiLogOut } from "react-icons/fi";
 import { useHistory } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure } from "@chakra-ui/react";
 import NavbarLogo from "./NavbarLogo";
 // Custom Components
@@ -29,6 +29,9 @@ import { SidebarResponsive } from "components/Sidebar/Sidebar";
 import React from "react";
 import { NavLink } from "react-router-dom";
 import routes from "routes.js";
+import { collection, getDocs, query, orderBy, limit, where } from "firebase/firestore";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { firestore } from "../../firebase";
 
 export default function HeaderLinks(props) {
   const {
@@ -42,6 +45,37 @@ export default function HeaderLinks(props) {
   } = props;
 
   const { colorMode } = useColorMode();
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const fetchNotifications = async () => {
+          try {
+            const notificationsCollection = collection(firestore, "notifications");
+            const q = query(
+              notificationsCollection,
+              where("userId", "==", user.uid),
+              orderBy("createdAt", "desc"),
+              limit(5)
+            );
+            const querySnapshot = await getDocs(q);
+            setNotifications(
+              querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+            );
+          } catch (error) {
+            console.error("Error fetching notifications:", error);
+          }
+        };
+        fetchNotifications();
+      } else {
+        setNotifications([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Chakra Color Mode
   let navbarIcon =
@@ -84,32 +118,17 @@ export default function HeaderLinks(props) {
         </MenuButton>
         <MenuList p='16px 8px' bg={menuBg}>
           <Flex flexDirection='column'>
-            <MenuItem borderRadius='8px' mb='10px'>
-              <ItemContent
-                time='13 minutes ago'
-                info='from Alicia'
-                boldInfo='New Message'
-                aName='Alicia'
-                aSrc={avatar1}
-              />
-            </MenuItem>
-            <MenuItem borderRadius='8px' mb='10px'>
-              <ItemContent
-                time='2 days ago'
-                info='by Josh Henry'
-                boldInfo='New Album'
-                aName='Josh Henry'
-                aSrc={avatar2}
-              />
-            </MenuItem>
-            <MenuItem borderRadius='8px'>
-              <ItemContent
-                time='3 days ago'
-                info='Payment succesfully completed!'
-                boldInfo=''
-                aName='Kara'
-                aSrc={avatar3}
-              />
+            {notifications.map((notification) => (
+              <MenuItem borderRadius='8px' mb='10px' key={notification.id}>
+                <ItemContent
+                  time={new Date(notification.createdAt?.toDate()).toLocaleTimeString()}
+                  info={notification.message}
+                  boldInfo={notification.title}
+                />
+              </MenuItem>
+            ))}
+            <MenuItem borderRadius='8px' onClick={() => history.push("/admin/notifications")}>
+              <Text textAlign="center" w="100%">See all notifications</Text>
             </MenuItem>
           </Flex>
         </MenuList>

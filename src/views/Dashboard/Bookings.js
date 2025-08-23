@@ -382,7 +382,7 @@ export default function Bookings() {
     { Header: "Service", accessor: "serviceName" },
     { Header: "Booking Date", accessor: d => `${d.selectedDate} ${d.selectedTime}`, id: 'bookingDate' },
     { Header: "Assigned Staff", accessor: "workerName" },
-    { Header: "Status", accessor: "status", Cell: ({value}) => <Tag colorScheme={value === 'completed' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag> },
+    { Header: "Status", accessor: "status", Cell: ({value}) => <Tag colorScheme={value === 'Completed' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag> },
     {
       Header: "Actions",
       id: "actions",
@@ -611,7 +611,7 @@ export default function Bookings() {
           }
         `}
       </style>
-      <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="0px">
+      <Card overflowX={{ sm: "scroll", xl: "hidden" }} pb="15px">
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
             <Heading size="md">Bookings</Heading>
@@ -629,7 +629,7 @@ export default function Bookings() {
               <Select placeholder="All Statuses" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} size="sm" bg="white" borderRadius="md" boxShadow="sm">
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
-                <option value="completed">Completed</option>
+                <option value="Completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </Select>
             </FormControl>

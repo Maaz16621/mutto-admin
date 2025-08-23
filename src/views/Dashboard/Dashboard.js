@@ -20,13 +20,15 @@ import {
   Tr,
   useColorMode,
   useColorModeValue,
+  Spinner,
 } from "@chakra-ui/react";
 // Custom components
 import Card from "components/Card/Card.js";
 import CardBody from "components/Card/CardBody.js";
 import CardHeader from "components/Card/CardHeader.js";
-import BarChart from "components/Charts/BarChart";
+
 import LineChart from "components/Charts/LineChart";
+const LazyBar = lazy(() => import('react-chartjs-2').then(module => ({ default: module.Bar })));
 import IconBox from "components/Icons/IconBox";
 // Custom icons
 import {
@@ -35,55 +37,187 @@ import {
   GlobeIcon,
   WalletIcon,
 } from "components/Icons/Icons.js";
-import React, { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import React, { useEffect, useState, useRef, Suspense, lazy } from "react";
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+import { collection, onSnapshot, query, doc, getDoc } from "firebase/firestore";
 import { firestore } from  "../../firebase";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import ImageArchitect1 from "assets/img/ImageArchitect1.png";
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { getBarChartConfig, lineChartData, lineChartOptions } from "variables/charts";
 
-delete L.Icon.Default.prototype._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-    iconUrl: require('leaflet/dist/images/marker-icon.png'),
-    shadowUrl: require('leaflet/dist/images/marker-shadow.png')
-});
 
 // Variables
-import {
-  barChartData,
-  barChartOptions,
-  lineChartData,
-  lineChartOptions,
-} from "variables/charts";
+
+
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const containerStyle = {
+  width: '100%',
+  height: '600px',
+  borderRadius: '15px',
+};
+
+const center = {
+  lat: 24.3506,
+  lng: 53.9396
+};
+
+
+const generateMarkerIcon = (name) => {
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("");
+  const svg = `
+    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="18" fill="#FF7D2E" stroke="white" stroke-width="2" />
+      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="16" font-family="Arial, sans-serif" dy=".3em">${initials}</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+};
 
 export default function Dashboard() {
   const [workers, setWorkers] = useState([]);
+  const [workerJobs, setWorkerJobs] = useState({});
+  const [dashboardData, setDashboardData] = useState({
+    todayMoney: 0,
+    todayBookings: 0,
+    completedBookings: 0,
+    totalEarnings: 0,
+  });
+  const [currency, setCurrency] = useState("$");
+  const [barChartData, setBarChartData] = useState({ labels: [], datasets: [] });
+  const [barChartOptions, setBarChartOptions] = useState({});
   const iconBlue = useColorModeValue("#FF7D2E", "#FF7D2E");
   const iconBoxInside = useColorModeValue("white", "white");
   const textColor = useColorModeValue("gray.700", "white");
   const mapRef = useRef();
 
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+    libraries: ['places', 'geometry'],
+  });
+
   useEffect(() => {
     const q = query(collection(firestore, "workers"));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const workersData = [];
+      const newWorkerJobs = {};
+      const promises = [];
+
       querySnapshot.forEach((doc) => {
-        workersData.push({ id: doc.id, ...doc.data() });
+        const worker = { id: doc.id, ...doc.data() };
+        workersData.push(worker);
+
+        if (worker.currentJobId) {
+          const jobPromise = getDoc(doc(firestore, "bookings", worker.currentJobId)).then((jobDoc) => {
+            if (jobDoc.exists()) {
+              newWorkerJobs[worker.id] = jobDoc.data();
+            }
+          });
+          promises.push(jobPromise);
+        }
       });
+
+      Promise.all(promises).then(() => {
+        setWorkerJobs(newWorkerJobs);
+      });
+
       setWorkers(workersData);
     });
 
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const bookingsUnsubscribe = onSnapshot(collection(firestore, "bookings"), (snapshot) => {
+      let todayMoney = 0;
+      let todayBookings = 0;
+      let completedBookings = 0;
+      let totalEarnings = 0;
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      const monthlyData = {};
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+
+      for (let i = 0; i < 6; i++) {
+        const date = new Date(currentYear, currentMonth - i, 1);
+        const monthYear = `${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear().toString().slice(2)}`;
+        monthlyData[monthYear] = 0;
+      }
+
+      snapshot.forEach(doc => {
+        const booking = doc.data();
+        if (booking.status === 'completed') {
+          completedBookings++;
+          totalEarnings += booking.serviceDetails?.cost || 0;
+          if (booking.selectedDate === today) {
+            todayMoney += booking.serviceDetails?.cost || 0;
+          }
+
+          // For monthly chart data
+          if (booking.selectedDate) {
+            const bookingDate = new Date(booking.selectedDate);
+            const bookingMonthYear = `${bookingDate.toLocaleString('default', { month: 'short' })}-${bookingDate.getFullYear().toString().slice(2)}`;
+            if (monthlyData.hasOwnProperty(bookingMonthYear)) {
+              monthlyData[bookingMonthYear]++;
+            }
+          }
+        }
+        if (booking.selectedDate === today) {
+          todayBookings++;
+        }
+      });
+
+      const labels = Object.keys(monthlyData).reverse();
+      const data = Object.values(monthlyData).reverse();
+
+      setDashboardData({ todayMoney, todayBookings, completedBookings, totalEarnings });
+
+      // Update chart data
+      const { chartData, chartOptions } = getBarChartConfig({ labels, data });
+      setBarChartData(chartData);
+      setBarChartOptions(chartOptions);
+    });
+
+    return () => bookingsUnsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const fetchAppSettings = async () => {
+      try {
+        const appSettingsDoc = await getDoc(doc(firestore, "settings", "appSettings"));
+        if (appSettingsDoc.exists()) {
+          setCurrency(appSettingsDoc.data().currency || "$");
+        }
+      } catch (error) {
+        console.error("Error fetching app settings:", error);
+      }
+    };
+    fetchAppSettings();
+  }, []);
+
   const { colorMode } = useColorMode();
 
   const handleWorkerCardClick = (worker) => {
     if (worker.location && worker.location.latitude && worker.location.longitude) {
-      mapRef.current.flyTo([worker.location.latitude, worker.location.longitude], 15);
+      const newPosition = { lat: worker.location.latitude, lng: worker.location.longitude };
+      if (mapRef.current) {
+        mapRef.current.panTo(newPosition);
+        mapRef.current.setZoom(15);
+      }
     }
   };
 
@@ -108,7 +242,7 @@ export default function Dashboard() {
                 </StatLabel>
                 <Flex>
                   <StatNumber fontSize='lg' color={textColor} fontWeight='bold'>
-                    $53,897
+                    {currency}{dashboardData.todayMoney}
                   </StatNumber>
                 </Flex>
               </Stat>
@@ -122,9 +256,6 @@ export default function Dashboard() {
               </IconBox>
             </Flex>
             <Text color='gray.400' fontSize='sm'>
-              <Text as='span' color='green.400' fontWeight='bold'>
-                +3.48%{" "}
-              </Text>
               Since last month
             </Text>
           </Flex>
@@ -147,7 +278,7 @@ export default function Dashboard() {
                 </StatLabel>
                 <Flex>
                   <StatNumber fontSize='lg' color={textColor} fontWeight='bold'>
-                    $3,200
+                    {dashboardData.todayBookings}
                   </StatNumber>
                 </Flex>
               </Stat>
@@ -161,9 +292,6 @@ export default function Dashboard() {
               </IconBox>
             </Flex>
             <Text color='gray.400' fontSize='sm'>
-              <Text as='span' color='green.400' fontWeight='bold'>
-                +5.2%{" "}
-              </Text>
               Since last month
             </Text>
           </Flex>
@@ -182,11 +310,11 @@ export default function Dashboard() {
                   color='gray.400'
                   fontWeight='bold'
                   textTransform='uppercase'>
-                  New Clients
+                  Completed Bookings
                 </StatLabel>
                 <Flex>
                   <StatNumber fontSize='lg' color={textColor} fontWeight='bold'>
-                    +2,503
+                    {dashboardData.completedBookings}
                   </StatNumber>
                 </Flex>
               </Stat>
@@ -200,9 +328,6 @@ export default function Dashboard() {
               </IconBox>
             </Flex>
             <Text color='gray.400' fontSize='sm'>
-              <Text as='span' color='red.500' fontWeight='bold'>
-                -2.82%{" "}
-              </Text>
               Since last month
             </Text>
           </Flex>
@@ -221,11 +346,11 @@ export default function Dashboard() {
                   color='gray.400'
                   fontWeight='bold'
                   textTransform='uppercase'>
-                  Total Sales
+                  Total Earnings
                 </StatLabel>
                 <Flex>
                   <StatNumber fontSize='lg' color={textColor} fontWeight='bold'>
-                    $173,000
+                    {currency}{dashboardData.totalEarnings}
                   </StatNumber>
                 </Flex>
               </Stat>
@@ -239,9 +364,6 @@ export default function Dashboard() {
               </IconBox>
             </Flex>
             <Text color='gray.400' fontSize='sm'>
-              <Text as='span' color='green.400' fontWeight='bold'>
-                +8.12%{" "}
-              </Text>
               Since last month
             </Text>
           </Flex>
@@ -283,11 +405,16 @@ export default function Dashboard() {
               PERFORMANCE
             </Text>
             <Text color={textColor} fontSize='lg' fontWeight='bold'>
-              Total orders
+              Completed Bookings
             </Text>
           </Flex>
           <Box minH='300px'>
-            <BarChart chartData={barChartData} chartOptions={barChartOptions} />
+            <Suspense fallback={<Flex justify="center" align="center" minH="300px"><Spinner size="xl" /></Flex>}>
+              <LazyBar
+                data={barChartData}
+                options={barChartOptions}
+              />
+            </Suspense>
           </Box>
         </Card>
         <Box gridColumn={{ lg: "1 / 3" }}>
@@ -297,25 +424,41 @@ export default function Dashboard() {
           <Card p='0px' maxW={{ sm: "320px", md: "100%" }}>
             <CardBody>
               <Box position="relative">
-                <MapContainer center={[24.3506, 53.9396]} zoom={10} style={{ height: '400px', width: '100%', borderRadius: '15px' }}>
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  />
-                  {workers.map(worker => (
-                    worker.location && worker.location.latitude && worker.location.longitude && (
-                      <Marker key={worker.id} position={[worker.location.latitude, worker.location.longitude]} />
-                    )
-                  ))}
-                </MapContainer>
+                {isLoaded ? (
+                  <GoogleMap
+                    mapContainerStyle={containerStyle}
+                    center={center}
+                    zoom={10}
+                    onLoad={map => mapRef.current = map}
+                    onUnmount={() => mapRef.current = null}
+                  >
+                    {workers.map(worker => (
+                      worker.location && worker.location.latitude && worker.location.longitude && (
+                        <Marker 
+                          key={worker.id} 
+                          position={{ lat: worker.location.latitude, lng: worker.location.longitude }} 
+                          icon={generateMarkerIcon(worker.userName)}
+                        />
+                      )
+                    ))}
+                  </GoogleMap>
+                ) : (
+                  <Flex justify="center" align="center" minH="400px">
+                    <Spinner size="xl" />
+                  </Flex>
+                )}
                 <Box position="absolute" top="10px" right="10px" zIndex="1000" bg="transparent" p="10px" borderRadius="md" maxH="380px" overflowY="auto">
                   {workers.filter(w => w.status === 'active').map(worker => (
                     <Card key={worker.id} mb="10px" bg="white" p="10px" onClick={() => handleWorkerCardClick(worker)} cursor="pointer">
                       <Flex align="center">
-                        <Avatar src={worker.profilePic || ImageArchitect1} size="sm" mr="10px" />
+                        <Avatar src={worker.profilePic} size="sm" mr="10px" />
                         <Box>
                           <Text fontWeight="bold">{worker.userName}</Text>
-                          <Text fontSize="sm">{worker.jobStatus || 'Idle'}</Text>
+                          {workerJobs[worker.id] ? (
+                            <Text fontSize="sm" color="green.500">On Job: {workerJobs[worker.id].serviceName}</Text>
+                          ) : (
+                            <Text fontSize="sm">{worker.jobStatus || 'Idle'}</Text>
+                          )}
                         </Box>
                       </Flex>
                     </Card>

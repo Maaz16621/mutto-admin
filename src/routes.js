@@ -19,6 +19,7 @@ import AdsManager from "views/Dashboard/AdsManager.js";
 import SubCategoryManager from "views/Dashboard/SubCategoryManager.js";
 import Feedback from "views/Dashboard/Feedback.js";
 import Chat from "views/Dashboard/Chat.js";
+import Notifications from "views/Dashboard/Notifications.js";
 
 import {
   HomeIcon,
@@ -31,7 +32,7 @@ import {
   SettingsIcon, // Import SettingsIcon
   
 } from "components/Icons/Icons";
-import {  IoCube, IoDocument, IoDocumentOutline, IoPeople, IoChatbubbles, IoDocumentText, IoBuild, IoTicket, IoLogIn, IoKey, IoConstruct, IoLayers, IoLayersOutline, IoFolder, IoFolderOpen, IoChatboxEllipses } from 'react-icons/io5';
+import {  IoCube, IoDocument, IoDocumentOutline, IoPeople, IoChatbubbles, IoDocumentText, IoBuild, IoTicket, IoLogIn, IoKey, IoConstruct, IoLayers, IoLayersOutline, IoFolder, IoFolderOpen, IoChatboxEllipses, IoNotifications } from 'react-icons/io5';
 import { FaBullhorn, FaPercentage } from 'react-icons/fa';
 import { RiSpeaker3Line } from 'react-icons/ri';
 
@@ -227,6 +228,14 @@ var dashRoutes = [
     component: Chat,
     layout: "/admin",
     permission: "chat",
+  },
+  {
+    path: "/notifications",
+    name: "Notifications",
+    category: "Main",
+    icon: <IoNotifications color='inherit' />,
+    component: Notifications,
+    layout: "/admin",
   },
 ];
 export default dashRoutes;

@@ -1,72 +1,69 @@
-export const barChartData = [
-  {
-    name: "Sales",
-    data: [15, 25, 28, 10, 25, 20],
-  },
-];
+export const getBarChartConfig = (monthlyBookingsData) => {
+  const labels = monthlyBookingsData.labels;
+  const data = monthlyBookingsData.data;
 
-export const barChartOptions = {
-  chart: {
-    toolbar: {
-      show: false,
+  return {
+    chartData: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Completed Bookings",
+          data: data,
+          backgroundColor: "#FF7D2E",
+          borderColor: "#FF7D2E",
+          borderWidth: 1,
+        },
+      ],
     },
-  },
-  tooltip: {
-    theme: "dark",
-  },
-  xaxis: {
-    categories: ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    labels: {
-      style: {
-        colors: "#A0AEC0",
-        fontSize: "12px",
-      },
-    },
-    show: true,
-    axisBorder: {
-      show: false,
-    },
-    
-  },
-  yaxis: {
-    show: true,
-    color: "#A0AEC0",
-    labels: {
-      show: true,
-      style: {
-        colors: "#A0AEC0",
-        fontSize: "14px",
-      },
-    },
-  },
-  fill: {
-    colors: "#ED8936",
-  },
-  dataLabels: {
-    enabled: false,
-  },
-  grid: {
-    strokeDashArray: 5,
-  },
-  plotOptions: {
-    bar: {
-      borderRadius: 15,
-      columnWidth: "15px",
-    },
-  },
-  responsive: [
-    {
-      breakpoint: 768,
-      options: {
-        plotOptions: {
-          bar: {
-            borderRadius: 0,
+    chartOptions: {
+      responsive: true,
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            color: "#A0AEC0",
+          },
+        },
+        y: {
+          display: false, // Hide Y-axis
+          grid: {
+            display: false, // Hide Y-axis grid lines
+          },
+          ticks: {
+            display: false, // Hide Y-axis tick labels
           },
         },
       },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                label += context.parsed.y;
+              }
+              return label;
+            }
+          }
+        },
+        legend: {
+          position: 'top',
+          display: false,
+        },
+        title: {
+          display: false,
+          text: 'Completed Bookings Last 6 Months',
+        },
+      },
     },
-  ],
+  };
 };
+
 
 export const lineChartData = [
   {

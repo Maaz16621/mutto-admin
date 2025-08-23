@@ -285,7 +285,7 @@ export default function ProductManager() {
       ),
       disableSortBy: true,
     },
-  ], [services]);
+  ], [services, categories, subCategories]);
 
   // Filtered data for search
   const filteredProducts = useMemo(() => {
