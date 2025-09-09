@@ -3,6 +3,7 @@ import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, Inp
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
+import GooglePlacesAutocomplete, { geocodeByPlaceId, getLatLng } from 'react-google-places-autocomplete';
 
 
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
@@ -16,19 +17,6 @@ import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
-
-// Debounce function
-const debounce = (func, delay) => {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, delay);
-  };
-};
 
 function ChangeView({ center, zoom, bounds }) {
   const map = useMap();
@@ -67,28 +55,8 @@ export default function WorkerManagement() {
   const [newOffDate, setNewOffDate] = useState("");
   const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
   const [mapBounds, setMapBounds] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
+  const [place, setPlace] = useState(null);
 
-  const debouncedSearch = useMemo(() => debounce(async (query) => {
-    if (query.length > 2) { // Only search if query is long enough
-      setLoading(true);
-      const data = await getOSMPlaceDetails(query);
-      // Filter results to only include those with detailed polygon GeoJSON
-      const filteredData = data.filter(item => item.geojson && (item.geojson.type === "Polygon" || item.geojson.type === "MultiPolygon"));
-      setSuggestions(filteredData);
-      setLoading(false);
-    } else {
-      setSuggestions([]);
-    }
-  }, 500), []); // 500ms debounce
-async function getOSMPlaceDetails(query) {
-  const res = await fetch(
-    `${API_BASE_URL}/api/nominatimProxy?query=${encodeURIComponent(query)}`
-  );
-  const data = await res.json();
-  return data; // Return raw data for suggestions
-}
 
   const openLocationModal = (worker) => {
     setSelectedWorkerForLocation(worker);
@@ -558,46 +526,24 @@ async function getPlaceDetails(placeId) {
               <VStack h="100%" spacing={0}>
                 <Box p={4} w="100%">
                  <Box position="relative" w="100%">
-                  <Input
-                    placeholder="Search location..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      debouncedSearch(e.target.value);
-                    }}
-                  />
-                  {loading && <Spinner size="sm" position="absolute" right="8px" top="50%" transform="translateY(-50%)" />}
-                  {suggestions.length > 0 && searchQuery && (
-                    <Box
-                      position="absolute"
-                      top="100%"
-                      left="0"
-                      right="0"
-                      zIndex="9999"
-                      bg="white"
-                      boxShadow="md"
-                      borderRadius="md"
-                      mt="1"
-                      maxH="300px"
-                      overflowY="auto"
-                    >
-                      {suggestions.map((suggestion) => (
-                        <Text
-                          key={suggestion.place_id}
-                          p="2"
-                          _hover={{ bg: "gray.100", cursor: "pointer" }}
-                          onClick={async () => {
-                            setSearchQuery(suggestion.display_name);
-                            setSuggestions([]); // Clear suggestions
-                            // Extract coordinates from the selected suggestion
-                            const { boundingbox, geojson } = suggestion;
-                            let coords = null;
+                  <GooglePlacesAutocomplete
+                    apiKey="AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs"
+                    selectProps={{
+                      place,
+                      onChange: async (place) => {
+                        setPlace(place);
+                        if (place && place.value) {
+                          const googlePlaceId = place.value.place_id;
+                          const response = await fetch(`${API_BASE_URL}/api/googleToOsm?googlePlaceId=${googlePlaceId}`);
+                          const data = await response.json();
 
-                            if (geojson && geojson.type === "Polygon") {
-                                coords = geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
-                            } else if (geojson && geojson.type === "MultiPolygon") {
+                          if (data.geojson && (data.geojson.type === "Polygon" || data.geojson.type === "MultiPolygon")) {
+                            let coords = null;
+                            if (data.geojson.type === "Polygon") {
+                                coords = data.geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
+                            } else if (data.geojson.type === "MultiPolygon") {
                                 // For MultiPolygon, take the first polygon
-                                coords = geojson.coordinates[0][0].map(p => [p[1], p[0]]);
+                                coords = data.geojson.coordinates[0][0].map(p => [p[1], p[0]]);
                             }
 
                             if (coords) {
@@ -612,13 +558,40 @@ async function getPlaceDetails(placeId) {
                               setServiceArea(shape);
                               setMapBounds(coords);
                             }
-                          }}
-                        >
-                          {suggestion.display_name}
-                        </Text>
-                      ))}
-                    </Box>
-                  )}
+                          } else {
+                            // Fallback to a square if no detailed OSM polygon is found
+                            const geocoded = await geocodeByPlaceId(place.value.place_id);
+                            const { lat, lng } = await getLatLng(geocoded[0]);
+                            const offset = 0.05;
+                            const leafletCoords = [
+                                [lat + offset, lng - offset],
+                                [lat + offset, lng + offset],
+                                [lat - offset, lng + offset],
+                                [lat - offset, lng - offset],
+                                [lat + offset, lng - offset]
+                            ];
+                            const shape = {
+                                type: "Feature",
+                                properties: {},
+                                geometry: {
+                                    type: "Polygon",
+                                    coordinates: [leafletCoords]
+                                }
+                            };
+                            setServiceArea(shape);
+                            setMapBounds(leafletCoords);
+                          }
+                        }
+                      },
+                      styles: {
+                        menu: (provided) => ({
+                          ...provided,
+                          zIndex: 9999,
+                        }),
+                      },
+                      isClearable: true,
+                    }}
+                  />
                 </Box>
 
                 </Box>

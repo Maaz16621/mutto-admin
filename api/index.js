@@ -5,6 +5,7 @@ const cors = require('cors');
 const deleteUserRoute = require('./deleteUser');
 const placeDetailsRoute = require('./placeDetails');
 const nominatimProxyRoute = require('./nominatimProxy');
+const googleToOsmRoute = require('./googleToOsm');
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:3000' }));
@@ -14,6 +15,7 @@ app.use(bodyParser.json());
 app.use('/api', deleteUserRoute);
 app.use('/api', placeDetailsRoute);
 app.use('/api', nominatimProxyRoute);
+app.use('/api', googleToOsmRoute);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
