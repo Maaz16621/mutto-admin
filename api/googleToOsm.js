@@ -11,6 +11,7 @@ router.get('/googleToOsm', async (req, res) => {
   if (!googlePlaceId) {
     return res.status(400).json({ error: 'Missing googlePlaceId' });
   }
+  //updated
 
   if (!googleApiKey) {
     return res.status(500).json({ error: 'Google API key not configured on the server.' });
