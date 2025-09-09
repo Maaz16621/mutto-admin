@@ -17,6 +17,19 @@ import CardBody from "components/Card/CardBody";
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
 
+// Debounce function
+const debounce = (func, delay) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, delay);
+  };
+};
+
 function ChangeView({ center, zoom, bounds }) {
   const map = useMap();
   useEffect(() => {
@@ -55,23 +68,26 @@ export default function WorkerManagement() {
   const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
   const [mapBounds, setMapBounds] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+
+  const debouncedSearch = useMemo(() => debounce(async (query) => {
+    if (query.length > 2) { // Only search if query is long enough
+      setLoading(true);
+      const data = await getOSMPlaceDetails(query);
+      // Filter results to only include those with detailed polygon GeoJSON
+      const filteredData = data.filter(item => item.geojson && (item.geojson.type === "Polygon" || item.geojson.type === "MultiPolygon"));
+      setSuggestions(filteredData);
+      setLoading(false);
+    } else {
+      setSuggestions([]);
+    }
+  }, 500), []); // 500ms debounce
 async function getOSMPlaceDetails(query) {
   const res = await fetch(
     `${API_BASE_URL}/api/nominatimProxy?query=${encodeURIComponent(query)}`
   );
   const data = await res.json();
-  if (data.length > 0) {
-    const { boundingbox } = data[0]; // [south, north, west, east]
-    const leafletCoords = [
-      [boundingbox[1], boundingbox[2]],
-      [boundingbox[1], boundingbox[3]],
-      [boundingbox[0], boundingbox[3]],
-      [boundingbox[0], boundingbox[2]],
-      [boundingbox[1], boundingbox[2]]
-    ];
-    return leafletCoords;
-  }
-  return null;
+  return data; // Return raw data for suggestions
 }
 
   const openLocationModal = (worker) => {
@@ -541,28 +557,69 @@ async function getPlaceDetails(placeId) {
             <ModalBody p={0} h="100%">
               <VStack h="100%" spacing={0}>
                 <Box p={4} w="100%">
-                 <Input
-  placeholder="Search location..."
-  value={searchQuery}
-  onChange={(e) => setSearchQuery(e.target.value)}
-  onKeyDown={async (e) => {
-    if (e.key === "Enter" && searchQuery) {
-      const coords = await getOSMPlaceDetails(searchQuery);
-      if (coords) {
-        const shape = {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "Polygon",
-            coordinates: [coords], // leaflet polygon needs [lat, lng]
-          },
-        };
-        setServiceArea(shape);
-        setMapBounds(coords);
-      }
-    }
-  }}
-/>
+                 <Box position="relative" w="100%">
+                  <Input
+                    placeholder="Search location..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      debouncedSearch(e.target.value);
+                    }}
+                  />
+                  {loading && <Spinner size="sm" position="absolute" right="8px" top="50%" transform="translateY(-50%)" />}
+                  {suggestions.length > 0 && searchQuery && (
+                    <Box
+                      position="absolute"
+                      top="100%"
+                      left="0"
+                      right="0"
+                      zIndex="9999"
+                      bg="white"
+                      boxShadow="md"
+                      borderRadius="md"
+                      mt="1"
+                      maxH="300px"
+                      overflowY="auto"
+                    >
+                      {suggestions.map((suggestion) => (
+                        <Text
+                          key={suggestion.place_id}
+                          p="2"
+                          _hover={{ bg: "gray.100", cursor: "pointer" }}
+                          onClick={async () => {
+                            setSearchQuery(suggestion.display_name);
+                            setSuggestions([]); // Clear suggestions
+                            // Extract coordinates from the selected suggestion
+                            const { boundingbox, geojson } = suggestion;
+                            let coords = null;
+
+                            if (geojson && geojson.type === "Polygon") {
+                                coords = geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
+                            } else if (geojson && geojson.type === "MultiPolygon") {
+                                // For MultiPolygon, take the first polygon
+                                coords = geojson.coordinates[0][0].map(p => [p[1], p[0]]);
+                            }
+
+                            if (coords) {
+                              const shape = {
+                                type: "Feature",
+                                properties: {},
+                                geometry: {
+                                  type: "Polygon",
+                                  coordinates: [coords],
+                                },
+                              };
+                              setServiceArea(shape);
+                              setMapBounds(coords);
+                            }
+                          }}
+                        >
+                          {suggestion.display_name}
+                        </Text>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
 
                 </Box>
                 <Box flexGrow={1} w="100%">

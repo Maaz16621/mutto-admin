@@ -11,7 +11,7 @@ router.get('/nominatimProxy', async (req, res) => {
     return res.status(400).json({ error: 'Missing query parameter' });
   }
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&polygon_geojson=1`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&polygon_geojson=1&accept-language=en`;
 
   try {
     const response = await fetch(url, {
