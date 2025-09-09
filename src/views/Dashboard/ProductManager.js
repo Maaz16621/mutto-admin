@@ -35,7 +35,8 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  IconButton
+  IconButton,
+  Textarea
 } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useSortBy, usePagination } from "react-table";
@@ -55,6 +56,7 @@ export default function ProductManager() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
+    description: "", // Added description field
     cost: "",
     time: "",
     assignedServices: [],
@@ -149,6 +151,7 @@ export default function ProductManager() {
       }
       const data = {
         name: form.name,
+        description: form.description || "", // Added description
         cost: Number(form.cost),
         time: Number(form.time),
         assignedServices: form.assignedServices,
@@ -187,6 +190,7 @@ export default function ProductManager() {
     setForm(product
       ? {
           name: product.name || "",
+          description: product.description || "", // Added description
           cost: product.cost || "",
           time: product.time || "",
           assignedServices: product.assignedServices || [],
@@ -194,7 +198,7 @@ export default function ProductManager() {
           categoryId: product.categoryId || "",
           subCategoryId: product.subCategoryId || "",
         }
-      : { name: "", cost: "", time: "", assignedServices: [], categoryId: "", subCategoryId: "" }
+      : { name: "", description: "", cost: "", time: "", assignedServices: [], categoryId: "", subCategoryId: "" } // Added description
     );
     setProductImageFile(null);
     setProductImagePreview(product && product.imageUrl ? product.imageUrl : "");
@@ -240,6 +244,7 @@ export default function ProductManager() {
       disableSortBy: true,
     },
     { Header: "Name", accessor: "name" },
+    { Header: "Description", accessor: "description", disableSortBy: true },
     {
       Header: "Category",
       accessor: "categoryId",
@@ -293,6 +298,7 @@ export default function ProductManager() {
     const q = search.toLowerCase();
     return products.filter(p =>
       (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q)) || // Added description to search filter
       (p.cost && String(p.cost).includes(q)) ||
       (p.time && String(p.time).includes(q)) ||
       (p.categoryId && categories.find(cat => cat.id === p.categoryId)?.name.toLowerCase().includes(q)) ||
@@ -482,6 +488,10 @@ export default function ProductManager() {
                       </Tooltip>
                     </FormLabel>
                     <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                  </FormControl>
+                  <FormControl mb={3}>
+                    <FormLabel>Description</FormLabel>
+                    <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Enter product description" />
                   </FormControl>
                   <FormControl mb={3} isRequired>
                     <FormLabel>Category</FormLabel>

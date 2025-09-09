@@ -382,7 +382,7 @@ export default function Bookings() {
     { Header: "Service", accessor: "serviceName" },
     { Header: "Booking Date", accessor: d => `${d.selectedDate} ${d.selectedTime}`, id: 'bookingDate' },
     { Header: "Assigned Staff", accessor: "workerName" },
-    { Header: "Status", accessor: "status", Cell: ({value}) => <Tag colorScheme={value === 'Completed' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag> },
+    { Header: "Status", accessor: "status", Cell: ({value}) => <Tag colorScheme={value === 'Cgemompleted' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag> },
     {
       Header: "Actions",
       id: "actions",

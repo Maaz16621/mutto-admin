@@ -1,23 +1,10 @@
-Loader must not be called again with different options. {"version":"weekly","apiKey":"AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs","id":"google-map-script","libraries":["places","geometry"],"language":"en","region":"US","mapIds":[],"nonce":"","url":"https://maps.googleapis.com/maps/api/js","authReferrerPolicy":"origin"} !== {"version":"weekly","apiKey":"AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs","id":"google-map-script","libraries":["places"],"language":"en","region":"US","mapIds":[],"nonce":"","url":"https://maps.googleapis.com/maps/api/js","authReferrerPolicy":"origin"}
-    at new Loader (http://localhost:3000/static/js/bundle.js:105012:15)
-    at http://localhost:3000/static/js/bundle.js:105300:12
-    at mountMemo (http://localhost:3000/static/js/bundle.js:232870:23)
-    at Object.useMemo (http://localhost:3000/static/js/bundle.js:233255:20)
-    at useMemo (http://localhost:3000/static/js/bundle.js:382600:25)
-    at useJsApiLoader (http://localhost:3000/static/js/bundle.js:105299:62)
-    at Bookings (http://localhost:3000/static/js/bundle.js:398977:78)
-    at renderWithHooks (http://localhost:3000/static/js/bundle.js:232098:22)
-    at mountIndeterminateComponent (http://localhost:3000/static/js/bundle.js:236070:17)
-    at beginWork (http://localhost:3000/static/js/bundle.js:237373:20)
-ERROR
-Loader must not be called again with different options. {"version":"weekly","apiKey":"AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs","id":"google-map-script","libraries":["places","geometry"],"language":"en","region":"US","mapIds":[],"nonce":"","url":"https://maps.googleapis.com/maps/api/js","authReferrerPolicy":"origin"} !== {"version":"weekly","apiKey":"AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs","id":"google-map-script","libraries":["places"],"language":"en","region":"US","mapIds":[],"nonce":"","url":"https://maps.googleapis.com/maps/api/js","authReferrerPolicy":"origin"}
-    at new Loader (http://localhost:3000/static/js/bundle.js:105012:15)
-    at http://localhost:3000/static/js/bundle.js:105300:12
-    at mountMemo (http://localhost:3000/static/js/bundle.js:232870:23)
-    at Object.useMemo (http://localhost:3000/static/js/bundle.js:233255:20)
-    at useMemo (http://localhost:3000/static/js/bundle.js:382600:25)
-    at useJsApiLoader (http://localhost:3000/static/js/bundle.js:105299:62)
-    at Bookings (http://localhost:3000/static/js/bundle.js:398977:78)
-    at renderWithHooks (http://localhost:3000/static/js/bundle.js:232098:22)
-    at mountIndeterminateComponent (http://localhost:3000/static/js/bundle.js:236070:17)
-    at beginWork (http://localhost:3000/static/js/bundle.js:237373:20)
+requests.js:1 
+ GET https://maps.googleapis.com/maps/api/place/details/json?place_id=ChIJy5pBdI…zgRD9MyFn41hAk&fields=geometry&key=AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs net::ERR_FAILED
+service-worker.js:1 Uncaught (in promise) TypeError: Failed to convert value to 'Response'.
+requests.js:1 
+ Uncaught (in promise) TypeError: Failed to fetch
+    at s.fetch (requests.js:1:3725)
+    at traffic.js:1:1473
+    at new Promise (<anonymous>)
+    at fetch (traffic.js:1:1450)
+    at onChange (WorkerManagement.js:521:1)

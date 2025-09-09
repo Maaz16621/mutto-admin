@@ -3,6 +3,7 @@ import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, Inp
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
+import GooglePlacesAutocomplete, { geocodeByPlaceId, getLatLng } from 'react-google-places-autocomplete';
 
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
 import { SearchIcon } from "@chakra-ui/icons";
@@ -53,6 +54,7 @@ export default function WorkerManagement() {
   const [newOffDate, setNewOffDate] = useState("");
   const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
   const [mapBounds, setMapBounds] = useState(null);
+  const [place, setPlace] = useState(null);
 
   const openLocationModal = (worker) => {
     setSelectedWorkerForLocation(worker);
@@ -111,6 +113,7 @@ export default function WorkerManagement() {
     setServiceArea(null);
     setMapCenter([24.3506, 53.9396]); // Reset to default
     setMapBounds(null);
+    setPlace(null);
   };
 
   const handleSaveArea = async () => {
@@ -505,6 +508,73 @@ export default function WorkerManagement() {
             <ModalCloseButton />
             <ModalBody p={0} h="100%">
               <VStack h="100%" spacing={0}>
+                <Box p={4} w="100%">
+                  <GooglePlacesAutocomplete
+                    apiKey="AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs"
+                    selectProps={{
+                      place,
+                      onChange: async (place) => {
+                        setPlace(place);
+                        if (place && place.value) {
+                          const placeId = place.value.place_id;
+                          const response = await fetch(`${API_BASE_URL}/api/placeDetails?placeId=${placeId}`);
+                          const data = await response.json();
+
+                          if (data.result && data.result.geometry && data.result.geometry.viewport) {
+                            const { northeast, southwest } = data.result.geometry.viewport;
+                            const leafletCoords = [
+                              [northeast.lat, southwest.lng],
+                              [northeast.lat, northeast.lng],
+                              [southwest.lat, northeast.lng],
+                              [southwest.lat, southwest.lng],
+                              [northeast.lat, southwest.lng]
+                            ];
+
+                            const shape = {
+                              type: "Feature",
+                              properties: {},
+                              geometry: {
+                                type: "Polygon",
+                                coordinates: [leafletCoords]
+                              }
+                            };
+                            setServiceArea(shape);
+                            setMapBounds(leafletCoords);
+                          } else {
+                            // Fallback to geocodeByPlaceId and creating a square
+                            const geocoded = await geocodeByPlaceId(place.value.place_id);
+                            const { lat, lng } = await getLatLng(geocoded[0]);
+                            const offset = 0.05;
+                            const leafletCoords = [
+                                [lat + offset, lng - offset],
+                                [lat + offset, lng + offset],
+                                [lat - offset, lng + offset],
+                                [lat - offset, lng - offset],
+                                [lat + offset, lng - offset]
+                            ];
+                            const shape = {
+                                type: "Feature",
+                                properties: {},
+                                geometry: {
+                                    type: "Polygon",
+                                    coordinates: [leafletCoords]
+                                }
+                            };
+                            setServiceArea(shape);
+                            setMapBounds(leafletCoords);
+                          }
+                        }
+                      },
+                      styles: {
+                        menu: (provided) => ({
+                          ...provided,
+                          zIndex: 9999,
+                        }),
+                      },
+                      isClearable: true,
+                    }}
+                  />
+                </Box>
                 <Box flexGrow={1} w="100%">
                   <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
                     <ChangeView center={mapCenter} zoom={13} bounds={mapBounds} />
