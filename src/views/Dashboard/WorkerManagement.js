@@ -535,33 +535,31 @@ async function getPlaceDetails(placeId) {
                         if (place && place.value) {
                           const googlePlaceId = place.value.place_id;
                           const response = await fetch(`${API_BASE_URL}/api/googleToOsm?googlePlaceId=${googlePlaceId}`);
-                          const data = await response.json();
+                          const geometry = await response.json(); // Renamed data to geometry
 
-                          if (data.geojson && (data.geojson.type === "Polygon" || data.geojson.type === "MultiPolygon")) {
-                            let coords = null;
-                            if (data.geojson.type === "Polygon") {
-                                coords = data.geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
-                            } else if (data.geojson.type === "MultiPolygon") {
-                                // For MultiPolygon, take the first polygon
-                                coords = data.geojson.coordinates[0][0].map(p => [p[1], p[0]]);
-                            }
+                          if (geometry.viewport) {
+                            const { northeast, southwest } = geometry.viewport;
+                            const leafletCoords = [
+                              [northeast.lat, southwest.lng],
+                              [northeast.lat, northeast.lng],
+                              [southwest.lat, northeast.lng],
+                              [southwest.lat, southwest.lng],
+                              [northeast.lat, southwest.lng]
+                            ];
 
-                            if (coords) {
-                              const shape = {
-                                type: "Feature",
-                                properties: {},
-                                geometry: {
-                                  type: "Polygon",
-                                  coordinates: [coords],
-                                },
-                              };
-                              setServiceArea(shape);
-                              setMapBounds(coords);
-                            }
-                          } else {
-                            // Fallback to a square if no detailed OSM polygon is found
-                            const geocoded = await geocodeByPlaceId(place.value.place_id);
-                            const { lat, lng } = await getLatLng(geocoded[0]);
+                            const shape = {
+                              type: "Feature",
+                              properties: {},
+                              geometry: {
+                                type: "Polygon",
+                                coordinates: [leafletCoords]
+                              }
+                            };
+                            setServiceArea(shape);
+                            setMapBounds(leafletCoords);
+                          } else if (geometry.location) {
+                            // Fallback to a square around the location if no viewport
+                            const { lat, lng } = geometry.location;
                             const offset = 0.05;
                             const leafletCoords = [
                                 [lat + offset, lng - offset],
@@ -580,6 +578,10 @@ async function getPlaceDetails(placeId) {
                             };
                             setServiceArea(shape);
                             setMapBounds(leafletCoords);
+                          } else {
+                            // If no geometry at all, clear service area
+                            setServiceArea(null);
+                            setMapBounds(null);
                           }
                         }
                       },
