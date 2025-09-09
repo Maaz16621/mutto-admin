@@ -1,34 +1,12 @@
-{"error":"Google API key not configured on the server."}
+service-worker.js:1 Uncaught (in promise) TypeError: Failed to convert value to 'Response'.
+Promise.then		
+(anonymous)	@	service-worker.js:17
 requests.js:1 
-            
-            
-           GET https://mutto-api--mutto-84d97.asia-east1.hosted.app/api/placeDetails?placeId=ChIJRcbZaklDXz4RYlEphFBu5r0 500 (Internal Server Error)
-s.fetch @ requests.js:1
-(anonymous) @ traffic.js:1
-fetch @ traffic.js:1
-onChange @ WorkerManagement.js:520
-(anonymous) @ useStateManager-7e1e8489.esm.js:35
-t.onChange @ Select-49a62830.esm.js:1237
-t.setValue @ Select-49a62830.esm.js:1258
-t.selectOption @ Select-49a62830.esm.js:1280
-Z.f @ Select-49a62830.esm.js:2367
-callCallback @ react-dom.development.js:4164
-invokeGuardedCallbackDev @ react-dom.development.js:4213
-invokeGuardedCallback @ react-dom.development.js:4277
-invokeGuardedCallbackAndCatchFirstError @ react-dom.development.js:4291
-executeDispatch @ react-dom.development.js:9041
-processDispatchQueueItemsInOrder @ react-dom.development.js:9073
-processDispatchQueue @ react-dom.development.js:9086
-dispatchEventsForPlugins @ react-dom.development.js:9097
-(anonymous) @ react-dom.development.js:9288
-batchedUpdates$1 @ react-dom.development.js:26179
-batchedUpdates @ react-dom.development.js:3991
-dispatchEventForPluginEventSystem @ react-dom.development.js:9287
-dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ react-dom.development.js:6465
-dispatchEvent @ react-dom.development.js:6457
-dispatchDiscreteEvent @ react-dom.development.js:6430
+ GET https://maps.googleapis.com/maps/api/place/details/json?place_id=ChIJy5pBdI…zgRD9MyFn41hAk&fields=geometry&key=AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs net::ERR_FAILED
 requests.js:1 
-            
-            
-           GET https://mutto-api--mutto-84d97.asia-east1.hosted.app/api/placeDetails?placeId=ChIJL3KReNC_3zgRtgLbO1xRWWA 500 (Internal Server Error)
-           
+ Uncaught (in promise) TypeError: Failed to fetch
+    at s.fetch (requests.js:1:3725)
+    at chrome-extension://e…s/traffic.js:1:1473
+    at new Promise (<anonymous>)
+    at fetch (chrome-extension://e…s/traffic.js:1:1450)
+    at onChange (WorkerManagement.js:521:1)
