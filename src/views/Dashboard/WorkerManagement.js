@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Switch, Tag, TagLabel, TagCloseButton, SimpleGrid, VStack, Menu, MenuButton, MenuList, MenuItem, Checkbox, Text } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
+import L from 'leaflet';
 import GooglePlacesAutocomplete, { geocodeByPlaceId, getLatLng } from 'react-google-places-autocomplete';
 
 
@@ -56,6 +57,56 @@ export default function WorkerManagement() {
   const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
   const [mapBounds, setMapBounds] = useState(null);
   const [place, setPlace] = useState(null);
+  const featureGroupRef = useRef();
+
+useEffect(() => {
+  const featureGroup = featureGroupRef.current;
+  if (!featureGroup) return;
+
+  // Clear existing layers
+  featureGroup.clearLayers();
+
+  if (serviceArea) {
+    let layer;
+
+    if (serviceArea.geometry.type === 'Polygon') {
+      let leafletCoords;
+
+      // Case 1: Already in GeoJSON format ([[lat, lng], ...])
+      if (Array.isArray(serviceArea.geometry.coordinates[0][0])) {
+        leafletCoords = serviceArea.geometry.coordinates[0];
+
+      // Case 2: Custom format ([{lat, lng}, ...])
+      } else if (serviceArea.geometry.coordinates[0].lat !== undefined) {
+        leafletCoords = serviceArea.geometry.coordinates.map(pt => [pt.lat, pt.lng]);
+      }
+
+      if (leafletCoords) {
+        layer = L.polygon(leafletCoords);
+      }
+
+    } else if (serviceArea.geometry.type === 'Point') {
+      const [lng, lat] = serviceArea.geometry.coordinates;
+      const center = [lat, lng];
+      const radius = serviceArea.properties.radius || 1000;
+      layer = L.circle(center, { radius });
+    }
+
+    if (layer) {
+      featureGroup.addLayer(layer);
+
+      // Enable editing
+      if (layer.editing) {
+        layer.editing.enable();
+      }
+
+      // Fit map
+      if (layer.getBounds) {
+        setMapBounds(layer.getBounds());
+      }
+    }
+  }
+}, [serviceArea]);
 
 
   const openLocationModal = (worker) => {
@@ -535,31 +586,33 @@ async function getPlaceDetails(placeId) {
                         if (place && place.value) {
                           const googlePlaceId = place.value.place_id;
                           const response = await fetch(`${API_BASE_URL}/api/googleToOsm?googlePlaceId=${googlePlaceId}`);
-                          const geometry = await response.json(); // Renamed data to geometry
+                          const data = await response.json();
 
-                          if (geometry.viewport) {
-                            const { northeast, southwest } = geometry.viewport;
-                            const leafletCoords = [
-                              [northeast.lat, southwest.lng],
-                              [northeast.lat, northeast.lng],
-                              [southwest.lat, northeast.lng],
-                              [southwest.lat, southwest.lng],
-                              [northeast.lat, southwest.lng]
-                            ];
+                          if (data.geojson && (data.geojson.type === "Polygon" || data.geojson.type === "MultiPolygon")) {
+                            let coords = null;
+                            if (data.geojson.type === "Polygon") {
+                                coords = data.geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
+                            } else if (data.geojson.type === "MultiPolygon") {
+                                // For MultiPolygon, take the first polygon
+                                coords = data.geojson.coordinates[0][0].map(p => [p[1], p[0]]);
+                            }
 
-                            const shape = {
-                              type: "Feature",
-                              properties: {},
-                              geometry: {
-                                type: "Polygon",
-                                coordinates: [leafletCoords]
-                              }
-                            };
-                            setServiceArea(shape);
-                            setMapBounds(leafletCoords);
-                          } else if (geometry.location) {
-                            // Fallback to a square around the location if no viewport
-                            const { lat, lng } = geometry.location;
+                            if (coords) {
+                              const shape = {
+                                type: "Feature",
+                                properties: {},
+                                geometry: {
+                                  type: "Polygon",
+                                  coordinates: [coords],
+                                },
+                              };
+                              setServiceArea(shape);
+                              setMapBounds(coords);
+                            }
+                          } else {
+                            // Fallback to a square if no detailed OSM polygon is found
+                            const geocoded = await geocodeByPlaceId(place.value.place_id);
+                            const { lat, lng } = await getLatLng(geocoded[0]);
                             const offset = 0.05;
                             const leafletCoords = [
                                 [lat + offset, lng - offset],
@@ -578,10 +631,6 @@ async function getPlaceDetails(placeId) {
                             };
                             setServiceArea(shape);
                             setMapBounds(leafletCoords);
-                          } else {
-                            // If no geometry at all, clear service area
-                            setServiceArea(null);
-                            setMapBounds(null);
                           }
                         }
                       },
@@ -600,30 +649,40 @@ async function getPlaceDetails(placeId) {
                 <Box flexGrow={1} w="100%">
                   <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
                     <ChangeView center={mapCenter} zoom={13} bounds={mapBounds} />
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    />
-                    <FeatureGroup>
-                      <EditControl
-                        position="topright"
-                        onCreated={onCreated}
-                        onEdited={onEdited}
-                        onDeleted={onDeleted}
-                        draw={{
-                          rectangle: false,
-                          polyline: false,
-                          marker: false,
-                          circlemarker: false,
-                        }}
-                      />
-                      {serviceArea && serviceArea.geometry.type === 'Polygon' && (
-                        <Polygon positions={serviceArea.geometry.coordinates[0]} />
-                      )}
-                      {serviceArea && serviceArea.geometry.type === 'Point' && (
-                        <Circle center={[serviceArea.geometry.coordinates[1], serviceArea.geometry.coordinates[0]]} radius={serviceArea.properties.radius} />
-                      )}
-                    </FeatureGroup>
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+                   <FeatureGroup ref={featureGroupRef}>
+  <EditControl
+    position="topright"
+    onCreated={onCreated}
+    onEdited={onEdited}
+    onDeleted={onDeleted}
+    draw={{
+      rectangle: false,
+      polyline: false,
+      marker: false,
+      circlemarker: false,
+    }}
+  />
+
+  {/* Render service area directly */}
+  {serviceArea && serviceArea.geometry.type === "Polygon" && (
+  <Polygon
+  positions={serviceArea.geometry.coordinates[0]}
+  pathOptions={{ color: "orange", weight: 2, fillOpacity: 0.2 }}
+/>
+
+  )}
+  {serviceArea && serviceArea.geometry.type === "Point" && (
+    <Circle
+      center={[
+        serviceArea.geometry.coordinates[1],
+        serviceArea.geometry.coordinates[0],
+      ]}
+      radius={serviceArea.properties.radius || 1000}
+    />
+  )}
+</FeatureGroup>
+
                   </MapContainer>
                 </Box>
                 <Flex p={4} justify="flex-end" w="100%">
