@@ -20,6 +20,7 @@ import SubCategoryManager from "views/Dashboard/SubCategoryManager.js";
 import Feedback from "views/Dashboard/Feedback.js";
 import Chat from "views/Dashboard/Chat.js";
 import Notifications from "views/Dashboard/Notifications.js";
+import NotificationManager from "views/Dashboard/NotificationManager.js";
 
 import {
   HomeIcon,
@@ -236,6 +237,15 @@ var dashRoutes = [
     icon: <IoNotifications color='inherit' />,
     component: Notifications,
     layout: "/admin",
+  },
+  {
+    path: "/notification-manager",
+    name: "Notification Manager",
+    category: "User Management",
+    icon: <IoNotifications color='inherit' />,
+    component: NotificationManager,
+    layout: "/admin",
+    permission: "notification-manager",
   },
 ];
 export default dashRoutes;

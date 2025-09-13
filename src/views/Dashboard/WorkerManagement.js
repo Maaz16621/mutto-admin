@@ -51,7 +51,7 @@ export default function WorkerManagement() {
   // State for the map modal
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [selectedWorkerForArea, setSelectedWorkerForArea] = useState(null);
-  const [serviceArea, setServiceArea] = useState(null);
+  const [serviceAreas, setServiceAreas] = useState([]);
   const [companySettings, setCompanySettings] = useState(null);
   const [newOffDate, setNewOffDate] = useState("");
   const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
@@ -66,47 +66,54 @@ useEffect(() => {
   // Clear existing layers
   featureGroup.clearLayers();
 
-  if (serviceArea) {
-    let layer;
+  serviceAreas.forEach((serviceArea, index) => {
+    if (serviceArea) {
+      let layer;
+      let newArea = JSON.parse(JSON.stringify(serviceArea));
 
-    if (serviceArea.geometry.type === 'Polygon') {
-      let leafletCoords;
-
-      // Case 1: Already in GeoJSON format ([[lat, lng], ...])
-      if (Array.isArray(serviceArea.geometry.coordinates[0][0])) {
-        leafletCoords = serviceArea.geometry.coordinates[0];
-
-      // Case 2: Custom format ([{lat, lng}, ...])
-      } else if (serviceArea.geometry.coordinates[0].lat !== undefined) {
-        leafletCoords = serviceArea.geometry.coordinates.map(pt => [pt.lat, pt.lng]);
+      if (newArea.geometry.type === 'Polygon') {
+        layer = L.polygon(newArea.geometry.coordinates[0]);
+      } else if (newArea.geometry.type === 'Point') {
+        const [lng, lat] = newArea.geometry.coordinates;
+        const center = [lat, lng];
+        const radius = newArea.properties.radius || 1000;
+        layer = L.circle(center, { radius });
       }
 
-      if (leafletCoords) {
-        layer = L.polygon(leafletCoords);
+      if (layer) {
+        layer.id = serviceArea.id || index;
+        featureGroup.addLayer(layer);
       }
-
-    } else if (serviceArea.geometry.type === 'Point') {
-      const [lng, lat] = serviceArea.geometry.coordinates;
-      const center = [lat, lng];
-      const radius = serviceArea.properties.radius || 1000;
-      layer = L.circle(center, { radius });
     }
+  });
 
-    if (layer) {
-      featureGroup.addLayer(layer);
-
-      // Enable editing
-      if (layer.editing) {
-        layer.editing.enable();
+  // Fit map to the bounds of all areas
+  if (serviceAreas.length > 0) {
+    const allCoords = serviceAreas.flatMap(area => {
+      if (area.geometry.type === 'Polygon') {
+        return area.geometry.coordinates[0];
+      } else if (area.geometry.type === 'Point') {
+        const centerLat = area.geometry.coordinates[1];
+        const centerLng = area.geometry.coordinates[0];
+        const radius = area.properties.radius;
+        const earthCircumference = 40075000;
+        const latitudeRadians = centerLat * (Math.PI / 180);
+        const metersPerDegreeLat = earthCircumference / 360;
+        const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
+        const radiusInLatDegrees = radius / metersPerDegreeLat;
+        const radiusInLngDegrees = radius / metersPerDegreeLng;
+        return [
+          [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees],
+          [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees],
+        ];
       }
-
-      // Fit map
-      if (layer.getBounds) {
-        setMapBounds(layer.getBounds());
-      }
+      return [];
+    });
+    if (allCoords.length > 0) {
+      setMapBounds(allCoords);
     }
   }
-}, [serviceArea]);
+}, [serviceAreas]);
 
 
   const openLocationModal = (worker) => {
@@ -129,32 +136,51 @@ useEffect(() => {
   // Map modal handlers
   const openMapModal = (worker) => {
     setSelectedWorkerForArea(worker);
-    if (worker.serviceArea) {
-      let area = JSON.parse(JSON.stringify(worker.serviceArea));
-      if (area.geometry.type === 'Polygon') {
-        const leafletCoords = area.geometry.coordinates.map(p => [p.lat, p.lng]);
-        area.geometry.coordinates = [leafletCoords];
-        if (leafletCoords.length > 0) {
-          setMapBounds(leafletCoords);
-        }
-      } else if (area.geometry.type === 'Point') {
-        const centerLat = area.geometry.coordinates[1];
-        const centerLng = area.geometry.coordinates[0];
-        const radius = area.properties.radius; // in meters
-        const earthCircumference = 40075000; // in meters
-        const latitudeRadians = centerLat * (Math.PI / 180);
-        const metersPerDegreeLat = earthCircumference / 360;
-        const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
-        const radiusInLatDegrees = radius / metersPerDegreeLat;
-        const radiusInLngDegrees = radius / metersPerDegreeLng;
+    let serviceArea = worker.serviceArea;
+    if (serviceArea && !Array.isArray(serviceArea)) {
+      serviceArea = [serviceArea];
+    }
 
-        const southWest = [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees];
-        const northEast = [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees];
-        setMapBounds([southWest, northEast]);
+    if (serviceArea && Array.isArray(serviceArea)) {
+      const areas = serviceArea.map(area => {
+        let newArea = JSON.parse(JSON.stringify(area));
+        if (newArea.geometry.type === 'Polygon') {
+          const leafletCoords = newArea.geometry.coordinates.map(p => [p.lat, p.lng]);
+          newArea.geometry.coordinates = [leafletCoords];
+        }
+        return newArea;
+      });
+      setServiceAreas(areas);
+
+      // Fit map to the bounds of all areas
+      if (areas.length > 0) {
+        const allCoords = areas.flatMap(area => {
+          if (area.geometry.type === 'Polygon') {
+            return area.geometry.coordinates[0];
+          } else if (area.geometry.type === 'Point') {
+            const centerLat = area.geometry.coordinates[1];
+            const centerLng = area.geometry.coordinates[0];
+            const radius = area.properties.radius;
+            const earthCircumference = 40075000;
+            const latitudeRadians = centerLat * (Math.PI / 180);
+            const metersPerDegreeLat = earthCircumference / 360;
+            const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
+            const radiusInLatDegrees = radius / metersPerDegreeLat;
+            const radiusInLngDegrees = radius / metersPerDegreeLng;
+            return [
+              [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees],
+              [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees],
+            ];
+          }
+          return [];
+        });
+        if (allCoords.length > 0) {
+          setMapBounds(allCoords);
+        }
       }
-      setServiceArea(area);
+
     } else {
-      setServiceArea(null);
+      setServiceAreas([]);
       setMapBounds(null);
     }
     setMapModalOpen(true);
@@ -163,25 +189,28 @@ useEffect(() => {
   const closeMapModal = () => {
     setMapModalOpen(false);
     setSelectedWorkerForArea(null);
-    setServiceArea(null);
+    setServiceAreas([]);
     setMapCenter([24.3506, 53.9396]); // Reset to default
     setMapBounds(null);
   };
 
   const handleSaveArea = async () => {
-    if (!selectedWorkerForArea || !serviceArea) return;
+    if (!selectedWorkerForArea || !serviceAreas) return;
 
     // Deep copy the object to avoid state mutation before saving
-    let areaToSave = JSON.parse(JSON.stringify(serviceArea));
+    let areasToSave = JSON.parse(JSON.stringify(serviceAreas));
 
     // Convert polygon coordinates to a Firestore-compatible format
-    if (areaToSave.geometry.type === 'Polygon') {
-      areaToSave.geometry.coordinates = areaToSave.geometry.coordinates[0].map(p => ({ lat: p[0], lng: p[1] }));
-    }
+    areasToSave.forEach(areaToSave => {
+      delete areaToSave.id; // Remove the temporary id
+      if (areaToSave.geometry.type === 'Polygon') {
+        areaToSave.geometry.coordinates = areaToSave.geometry.coordinates[0].map(p => ({ lat: p[0], lng: p[1] }));
+      }
+    });
 
     setLoading(true);
     try {
-      await updateDoc(doc(firestore, "workers", selectedWorkerForArea.id), { serviceArea: areaToSave });
+      await updateDoc(doc(firestore, "workers", selectedWorkerForArea.id), { serviceArea: areasToSave });
       toast({ title: "Service area updated", position: "top-right" });
       fetchWorkers(); // Refetch to get the latest data
       closeMapModal();
@@ -200,7 +229,8 @@ useEffect(() => {
     if (shape.geometry.type === 'Polygon') {
       shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
     }
-    setServiceArea(shape);
+    layer.id = layer._leaflet_id;
+    setServiceAreas(prevAreas => [...prevAreas, { ...shape, id: layer.id }]);
   };
 
   const onEdited = (e) => {
@@ -212,12 +242,22 @@ useEffect(() => {
       if (shape.geometry.type === 'Polygon') {
         shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
       }
-      setServiceArea(shape);
+
+      setServiceAreas(prevAreas => {
+        const newAreas = [...prevAreas];
+        const index = newAreas.findIndex(a => a.id === layer.id);
+        if (index !== -1) {
+          newAreas[index] = { ...shape, id: layer.id };
+        }
+        return newAreas;
+      });
     });
   };
 
-  const onDeleted = () => {
-    setServiceArea(null);
+  const onDeleted = (e) => {
+    e.layers.eachLayer(layer => {
+      setServiceAreas(prevAreas => prevAreas.filter(a => a.id !== layer.id));
+    });
   };
 
   const handleAddOffDate = () => {
@@ -606,7 +646,7 @@ async function getPlaceDetails(placeId) {
                                   coordinates: [coords],
                                 },
                               };
-                              setServiceArea(shape);
+                              setServiceAreas(prevAreas => [...prevAreas, shape]);
                               setMapBounds(coords);
                             }
                           } else {
@@ -629,7 +669,7 @@ async function getPlaceDetails(placeId) {
                                     coordinates: [leafletCoords]
                                 }
                             };
-                            setServiceArea(shape);
+                            setServiceAreas(prevAreas => [...prevAreas, shape]);
                             setMapBounds(leafletCoords);
                           }
                         }
@@ -664,23 +704,30 @@ async function getPlaceDetails(placeId) {
     }}
   />
 
-  {/* Render service area directly */}
-  {serviceArea && serviceArea.geometry.type === "Polygon" && (
-  <Polygon
-  positions={serviceArea.geometry.coordinates[0]}
-  pathOptions={{ color: "orange", weight: 2, fillOpacity: 0.2 }}
-/>
-
-  )}
-  {serviceArea && serviceArea.geometry.type === "Point" && (
-    <Circle
-      center={[
-        serviceArea.geometry.coordinates[1],
-        serviceArea.geometry.coordinates[0],
-      ]}
-      radius={serviceArea.properties.radius || 1000}
-    />
-  )}
+  {/* Render service areas directly */}
+  {serviceAreas.map((serviceArea, index) => {
+    if (serviceArea.geometry.type === "Polygon") {
+      return (
+        <Polygon
+          key={index}
+          positions={serviceArea.geometry.coordinates[0]}
+          pathOptions={{ color: "orange", weight: 2, fillOpacity: 0.2 }}
+        />
+      );
+    } else if (serviceArea.geometry.type === "Point") {
+      return (
+        <Circle
+          key={index}
+          center={[
+            serviceArea.geometry.coordinates[1],
+            serviceArea.geometry.coordinates[0],
+          ]}
+          radius={serviceArea.properties.radius || 1000}
+        />
+      );
+    }
+    return null;
+  })}
 </FeatureGroup>
 
                   </MapContainer>
