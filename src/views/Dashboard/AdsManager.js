@@ -58,6 +58,7 @@ export default function AdsManager() {
     audienceNationality: "",
     active: true,
     imageUrl: "",
+    language: "en", // New language field
   });
   const [adImageFile, setAdImageFile] = useState(null);
   const [adImagePreview, setAdImagePreview] = useState("");
@@ -113,6 +114,7 @@ export default function AdsManager() {
         audienceNationality: form.audienceNationality,
         active: !!form.active,
         imageUrl: imageUrl || "",
+        language: form.language, // Save language
         updatedAt: serverTimestamp(),
       };
       if (selectedAd) {
@@ -147,8 +149,9 @@ export default function AdsManager() {
           audienceNationality: ad.audienceNationality || "",
           active: ad.active !== undefined ? ad.active : true,
           imageUrl: ad.imageUrl || "",
+          language: ad.language || "en", // Populate language
         }
-      : { title: "", link: "", audienceNationality: "", active: true, imageUrl: "" }
+      : { title: "", link: "", audienceNationality: "", active: true, imageUrl: "", language: "en" } // Default language for new ad
     );
     setAdImageFile(null);
     setAdImagePreview(ad && ad.imageUrl ? ad.imageUrl : "");
@@ -182,6 +185,7 @@ export default function AdsManager() {
     { Header: "Title", accessor: "title" },
     { Header: "Link", accessor: "link", Cell: ({ value }) => value ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : "-" },
     { Header: "Audience", accessor: "audienceNationality" },
+    { Header: "Language", accessor: "language" },
     { Header: "Impressions", accessor: "impression" },
     { Header: "Clicks", accessor: "clicks" },
     { Header: "Active", accessor: "active", Cell: ({ value }) => value ? "Yes" : "No" },
@@ -400,6 +404,16 @@ export default function AdsManager() {
                       <option value="Oman">Oman</option>
                       <option value="Qatar">Qatar</option>
                       <option value="Other">Other</option>
+                    </Select>
+                  </FormControl>
+                  <FormControl mb={3}>
+                    <FormLabel>Language</FormLabel>
+                    <Select placeholder="Select language" value={form.language} onChange={e => setForm(f => ({ ...f, language: e.target.value }))}>
+                      <option value="en">English</option>
+                      <option value="ar">Arabic</option>
+                      <option value="ru">Russian</option>
+                      <option value="hi">Hindi</option>
+                      <option value="no">Norwegian</option>
                     </Select>
                   </FormControl>
                   <FormControl mb={3} display="flex" alignItems="center">

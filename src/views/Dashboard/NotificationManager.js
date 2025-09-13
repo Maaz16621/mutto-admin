@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Button, Flex, Heading, Textarea, Select, useToast, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
 import { useTable, useGlobalFilter, useSortBy, usePagination } from "react-table";
 import { SearchIcon } from "@chakra-ui/icons";
-import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { firestore } from "../../firebase";
 import Card from 'components/Card/Card.js';
 import CardHeader from 'components/Card/CardHeader.js';
@@ -16,11 +16,11 @@ export default function NotificationManager() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
   const [globalFilter, setGlobalFilter] = useState("");
-
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(firestore, "notifications"));
+      const q = query(collection(firestore, "notifications"), where("source", "==", "notificationManager"));
+      const querySnapshot = await getDocs(q);
       const notificationList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setNotifications(notificationList);
     } catch (err) {
@@ -41,32 +41,16 @@ export default function NotificationManager() {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5001/api/send-push', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipientType: recipientType,
-          title: notification.title,
-          body: notification.body,
-        }),
+      await addDoc(collection(firestore, "notifications"), {
+        title: notification.title,
+        body: notification.body,
+        recipientType: recipientType,
+        createdAt: serverTimestamp(),
+        source: "notificationManager",
       });
-
-      if (response.ok) {
-        await addDoc(collection(firestore, "notifications"), {
-          title: notification.title,
-          body: notification.body,
-          recipientType: recipientType,
-          createdAt: serverTimestamp(),
-        });
-        toast({ title: 'Notification sent successfully', status: 'success', position: 'top-right' });
-        fetchNotifications();
-        onClose();
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send notification');
-      }
+      toast({ title: 'Notification sent successfully', status: 'success', position: 'top-right' });
+      fetchNotifications();
+      onClose();
     } catch (error) {
       toast({ title: 'Error sending notification', status: 'error', description: error.message, position: 'top-right' });
     }
