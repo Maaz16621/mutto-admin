@@ -4,6 +4,22 @@ const fetch = require('node-fetch');
 const router = express.Router();
 
 // GET /api/googleToOsm?googlePlaceId=...
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI/180; // φ, λ in radians
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  const d = R * c; // in metres
+  return d;
+}
+
 router.get('/googleToOsm', async (req, res) => {
   const { googlePlaceId } = req.query;
   const googleApiKey = "AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs";
@@ -29,6 +45,7 @@ router.get('/googleToOsm', async (req, res) => {
 
     const { name, address_components } = googleData.result;
     const { lat, lng } = googleData.result.geometry.location;
+    const viewport = googleData.result.geometry.viewport; // Get viewport here
 
     let countryCode = null;
     if (address_components) {
@@ -105,15 +122,31 @@ router.get('/googleToOsm', async (req, res) => {
       }
     }
 
+    // If no detailed OSM geometry found after all attempts, fallback to a point with calculated radius
     if (!osmData || !osmData.geojson) {
-      const defaultRadius = 500; // meters
+      let calculatedRadius = 500; // Default fallback radius
+
+      if (viewport) {
+        const neLat = viewport.northeast.lat;
+        const neLng = viewport.northeast.lng;
+        const swLat = viewport.southwest.lat;
+        const swLng = viewport.southwest.lng;
+
+        // Calculate diagonal distance of the viewport
+        const diagonalDistance = haversineDistance(neLat, neLng, swLat, swLng);
+        calculatedRadius = diagonalDistance / 2; // Take half the diagonal as radius
+
+        // Ensure a reasonable minimum/maximum radius
+        calculatedRadius = Math.max(100, Math.min(calculatedRadius, 5000)); // Min 100m, Max 5km
+      }
+
       osmData = {
         osm_id: googlePlaceId, // Use Google Place ID as fallback OSM ID
         display_name: name, // Use Google Place name as fallback display name
         geojson: {
           type: "Point",
           coordinates: [lng, lat], // GeoJSON format: [lng, lat]
-          properties: { radius: defaultRadius }
+          properties: { radius: calculatedRadius }
         }
       };
     }

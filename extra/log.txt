@@ -1,9 +1,14 @@
-ncaught TypeError: Cannot read properties of undefined (reading 'disable')
-    at NewClass._disableLayerEdit (leaflet.draw.js:9:1)
-    at NewClass.eachLayer (LayerGroup.js:122:1)
-    at NewClass.removeHooks (leaflet.draw.js:9:1)
-    at NewClass.disable (Handler.js:33:1)
-    at NewClass.disable (leaflet.draw.js:9:1)
-    at NewClass.disable (leaflet.draw.js:9:1)
-    at NewClass.disable (leaflet.draw.js:9:1)
-    at HTMLAnchorElement.handler (DomEvent.js:108:1)
+{
+    "osm_id": "ChIJy5pBdImU3zgRD9MyFn41hAk",
+    "display_name": "Rawalpindi",
+    "geojson": {
+        "type": "Point",
+        "coordinates": [
+            73.06578619999999,
+            33.5848397
+        ],
+        "properties": {
+            "radius": 500
+        }
+    }
+}
