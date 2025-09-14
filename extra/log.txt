@@ -1,8 +1,6 @@
-DEFAULT 2025-09-13T10:14:55.712095Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] Processing new notification: New notification. Recipient Type: workers
-DEFAULT 2025-09-13T10:15:02.925599Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] Found 2 tokens for workers. Tokens: [
-DEFAULT 2025-09-13T10:15:02.925611Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] 'ExponentPushToken[T6tKCAG-Ua6zdo8BaGCU-V]',
-DEFAULT 2025-09-13T10:15:02.925615Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] 'ExponentPushToken[hqNw2GC1WUKw2UWLQYK09M]'
-DEFAULT 2025-09-13T10:15:02.925618Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] ]
-DEFAULT 2025-09-13T10:15:02.925894Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] Skipping push notifications for userType: workers
-DEFAULT 2025-09-13T10:15:02.925958Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] Push notifications sent for new notification: New notification to workers.
-DEBUG 2025-09-13T10:15:03.026309025Z [resource.labels.functionName: sendPushOnNewNotification] [labels.executionId: jzsop0pmdtsl] Function execution took 7537 ms, finished with status: 'ok'
+TypeError: Cannot read properties of undefined (reading 'location')
+    at get-lat-lng.ts:7:1
+    at new Promise (<anonymous>)
+    at di (get-lat-lng.ts:3:1)
+    at handleSelectSearch (SetArea.js:168:1)
+    at onClick (SetArea.js:442:1)

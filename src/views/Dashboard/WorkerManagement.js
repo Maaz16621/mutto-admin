@@ -2,10 +2,6 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, Td, InputGroup, InputLeftElement, IconButton, useToast, Spinner, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, useDisclosure, FormControl, FormLabel, Select, Tooltip, Icon, Switch, Tag, TagLabel, TagCloseButton, SimpleGrid, VStack, Menu, MenuButton, MenuList, MenuItem, Checkbox, Text } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MapContainer, TileLayer, Polygon, FeatureGroup, Circle, useMap } from 'react-leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L from 'leaflet';
-import GooglePlacesAutocomplete, { geocodeByPlaceId, getLatLng } from 'react-google-places-autocomplete';
-
 
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
 import { SearchIcon } from "@chakra-ui/icons";
@@ -16,6 +12,7 @@ import { firestore } from "../../firebase";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
+import SetArea from "./SetArea";
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
 
@@ -28,6 +25,17 @@ function ChangeView({ center, zoom, bounds }) {
       map.setView(center, zoom);
     }
   }, [center, zoom, bounds, map]);
+  return null;
+}
+
+function MapEvents({ onMapClick }) {
+  const map = useMap();
+  useEffect(() => {
+    map.on('click', onMapClick);
+    return () => {
+      map.off('click', onMapClick);
+    };
+  }, [map, onMapClick]);
   return null;
 }
 
@@ -51,213 +59,37 @@ export default function WorkerManagement() {
   // State for the map modal
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [selectedWorkerForArea, setSelectedWorkerForArea] = useState(null);
-  const [serviceAreas, setServiceAreas] = useState([]);
   const [companySettings, setCompanySettings] = useState(null);
   const [newOffDate, setNewOffDate] = useState("");
-  const [mapCenter, setMapCenter] = useState([24.3506, 53.9396]);
-  const [mapBounds, setMapBounds] = useState(null);
-  const [place, setPlace] = useState(null);
-  const featureGroupRef = useRef();
 
-useEffect(() => {
-  const featureGroup = featureGroupRef.current;
-  if (!featureGroup) return;
-
-  // Clear existing layers
-  featureGroup.clearLayers();
-
-  serviceAreas.forEach((serviceArea, index) => {
-    if (serviceArea) {
-      let layer;
-      let newArea = JSON.parse(JSON.stringify(serviceArea));
-
-      if (newArea.geometry.type === 'Polygon') {
-        layer = L.polygon(newArea.geometry.coordinates[0]);
-      } else if (newArea.geometry.type === 'Point') {
-        const [lng, lat] = newArea.geometry.coordinates;
-        const center = [lat, lng];
-        const radius = newArea.properties.radius || 1000;
-        layer = L.circle(center, { radius });
-      }
-
-      if (layer) {
-        layer.id = serviceArea.id || index;
-        featureGroup.addLayer(layer);
-      }
-    }
-  });
-
-  // Fit map to the bounds of all areas
-  if (serviceAreas.length > 0) {
-    const allCoords = serviceAreas.flatMap(area => {
-      if (area.geometry.type === 'Polygon') {
-        return area.geometry.coordinates[0];
-      } else if (area.geometry.type === 'Point') {
-        const centerLat = area.geometry.coordinates[1];
-        const centerLng = area.geometry.coordinates[0];
-        const radius = area.properties.radius;
-        const earthCircumference = 40075000;
-        const latitudeRadians = centerLat * (Math.PI / 180);
-        const metersPerDegreeLat = earthCircumference / 360;
-        const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
-        const radiusInLatDegrees = radius / metersPerDegreeLat;
-        const radiusInLngDegrees = radius / metersPerDegreeLng;
-        return [
-          [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees],
-          [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees],
-        ];
-      }
-      return [];
-    });
-    if (allCoords.length > 0) {
-      setMapBounds(allCoords);
-    }
-  }
-}, [serviceAreas]);
-
-
-  const openLocationModal = (worker) => {
-    setSelectedWorkerForLocation(worker);
-    if (worker.location && worker.location.latitude && worker.location.longitude) {
-      const url = `https://www.google.com/maps?q=${worker.location.latitude},${worker.location.longitude}&z=15&output=embed`;
-      setLocationUrl(url);
-    } else {
-      setLocationUrl("");
-    }
-    setLocationModalOpen(true);
-  };
-
-  const closeLocationModal = () => {
-    setLocationModalOpen(false);
-    setLocationUrl("");
-    setSelectedWorkerForLocation(null);
-  };
-
-  // Map modal handlers
   const openMapModal = (worker) => {
     setSelectedWorkerForArea(worker);
-    let serviceArea = worker.serviceArea;
-    if (serviceArea && !Array.isArray(serviceArea)) {
-      serviceArea = [serviceArea];
-    }
-
-    if (serviceArea && Array.isArray(serviceArea)) {
-      const areas = serviceArea.map(area => {
-        let newArea = JSON.parse(JSON.stringify(area));
-        if (newArea.geometry.type === 'Polygon') {
-          const leafletCoords = newArea.geometry.coordinates.map(p => [p.lat, p.lng]);
-          newArea.geometry.coordinates = [leafletCoords];
-        }
-        return newArea;
-      });
-      setServiceAreas(areas);
-
-      // Fit map to the bounds of all areas
-      if (areas.length > 0) {
-        const allCoords = areas.flatMap(area => {
-          if (area.geometry.type === 'Polygon') {
-            return area.geometry.coordinates[0];
-          } else if (area.geometry.type === 'Point') {
-            const centerLat = area.geometry.coordinates[1];
-            const centerLng = area.geometry.coordinates[0];
-            const radius = area.properties.radius;
-            const earthCircumference = 40075000;
-            const latitudeRadians = centerLat * (Math.PI / 180);
-            const metersPerDegreeLat = earthCircumference / 360;
-            const metersPerDegreeLng = Math.cos(latitudeRadians) * (earthCircumference / 360);
-            const radiusInLatDegrees = radius / metersPerDegreeLat;
-            const radiusInLngDegrees = radius / metersPerDegreeLng;
-            return [
-              [centerLat - radiusInLatDegrees, centerLng - radiusInLngDegrees],
-              [centerLat + radiusInLatDegrees, centerLng + radiusInLngDegrees],
-            ];
-          }
-          return [];
-        });
-        if (allCoords.length > 0) {
-          setMapBounds(allCoords);
-        }
-      }
-
-    } else {
-      setServiceAreas([]);
-      setMapBounds(null);
-    }
     setMapModalOpen(true);
   };
 
   const closeMapModal = () => {
     setMapModalOpen(false);
     setSelectedWorkerForArea(null);
-    setServiceAreas([]);
-    setMapCenter([24.3506, 53.9396]); // Reset to default
-    setMapBounds(null);
   };
 
-  const handleSaveArea = async () => {
+  const handleSaveArea = async (serviceAreas) => {
     if (!selectedWorkerForArea || !serviceAreas) return;
 
-    // Deep copy the object to avoid state mutation before saving
-    let areasToSave = JSON.parse(JSON.stringify(serviceAreas));
-
-    // Convert polygon coordinates to a Firestore-compatible format
-    areasToSave.forEach(areaToSave => {
-      delete areaToSave.id; // Remove the temporary id
-      if (areaToSave.geometry.type === 'Polygon') {
-        areaToSave.geometry.coordinates = areaToSave.geometry.coordinates[0].map(p => ({ lat: p[0], lng: p[1] }));
-      }
+    let areasToSave = serviceAreas.map(area => {
+      const { id, ...rest } = area;
+      return rest;
     });
 
     setLoading(true);
     try {
       await updateDoc(doc(firestore, "workers", selectedWorkerForArea.id), { serviceArea: areasToSave });
       toast({ title: "Service area updated", position: "top-right" });
-      fetchWorkers(); // Refetch to get the latest data
+      fetchWorkers();
       closeMapModal();
     } catch (err) {
       toast({ title: "Error saving service area", status: "error", description: err.message, position: "top-right" });
     }
     setLoading(false);
-  };
-
-  const onCreated = (e) => {
-    const { layerType, layer } = e;
-    const shape = layer.toGeoJSON();
-    if (layerType === 'circle') {
-      shape.properties.radius = layer.getRadius();
-    }
-    if (shape.geometry.type === 'Polygon') {
-      shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
-    }
-    layer.id = layer._leaflet_id;
-    setServiceAreas(prevAreas => [...prevAreas, { ...shape, id: layer.id }]);
-  };
-
-  const onEdited = (e) => {
-    e.layers.eachLayer(layer => {
-      const shape = layer.toGeoJSON();
-      if (layer.getRadius) {
-        shape.properties.radius = layer.getRadius();
-      }
-      if (shape.geometry.type === 'Polygon') {
-        shape.geometry.coordinates = [shape.geometry.coordinates[0].map(p => [p[1], p[0]])];
-      }
-
-      setServiceAreas(prevAreas => {
-        const newAreas = [...prevAreas];
-        const index = newAreas.findIndex(a => a.id === layer.id);
-        if (index !== -1) {
-          newAreas[index] = { ...shape, id: layer.id };
-        }
-        return newAreas;
-      });
-    });
-  };
-
-  const onDeleted = (e) => {
-    e.layers.eachLayer(layer => {
-      setServiceAreas(prevAreas => prevAreas.filter(a => a.id !== layer.id));
-    });
   };
 
   const handleAddOffDate = () => {
@@ -286,6 +118,28 @@ async function getPlaceDetails(placeId) {
     });
   });
 }
+
+const fetchNominatimBoundary = async (query) => {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=geojson&polygon_geojson=1&limit=1`);
+    const data = await response.json();
+
+    if (data && data.features && data.features.length > 0) {
+      const feature = data.features[0];
+      if (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon") {
+        return feature.geometry;
+      }
+    }
+
+    // 🔄 If Nominatim fails → try Overpass
+    return await fetchOverpassBoundary(query);
+  } catch (error) {
+    console.error("Error fetching Nominatim boundary:", error);
+    return null;
+  }
+};
+
+
   const fetchCompanySettings = async () => {
     try {
       const settingsDocRef = doc(firestore, "settings", "appSettings");
@@ -607,139 +461,14 @@ async function getPlaceDetails(placeId) {
       )}
 
       {/* Map Modal for setting service area */}
-      {mapModalOpen && (
-        <Modal isOpen={mapModalOpen} onClose={closeMapModal} size="xl" isCentered>
-          <ModalOverlay />
-          <ModalContent maxW="800px" h="600px">
-            <ModalHeader>Set Worker Service Area</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody p={0} h="100%">
-              <VStack h="100%" spacing={0}>
-                <Box p={4} w="100%">
-                 <Box position="relative" w="100%">
-                  <GooglePlacesAutocomplete
-                    apiKey="AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs"
-                    selectProps={{
-                      place,
-                      onChange: async (place) => {
-                        setPlace(place);
-                        if (place && place.value) {
-                          const googlePlaceId = place.value.place_id;
-                          const response = await fetch(`${API_BASE_URL}/api/googleToOsm?googlePlaceId=${googlePlaceId}`);
-                          const data = await response.json();
-
-                          if (data.geojson && (data.geojson.type === "Polygon" || data.geojson.type === "MultiPolygon")) {
-                            let coords = null;
-                            if (data.geojson.type === "Polygon") {
-                                coords = data.geojson.coordinates[0].map(p => [p[1], p[0]]); // Convert [lng, lat] to [lat, lng]
-                            } else if (data.geojson.type === "MultiPolygon") {
-                                // For MultiPolygon, take the first polygon
-                                coords = data.geojson.coordinates[0][0].map(p => [p[1], p[0]]);
-                            }
-
-                            if (coords) {
-                              const shape = {
-                                type: "Feature",
-                                properties: {},
-                                geometry: {
-                                  type: "Polygon",
-                                  coordinates: [coords],
-                                },
-                              };
-                              setServiceAreas(prevAreas => [...prevAreas, shape]);
-                              setMapBounds(coords);
-                            }
-                          } else {
-                            // Fallback to a square if no detailed OSM polygon is found
-                            const geocoded = await geocodeByPlaceId(place.value.place_id);
-                            const { lat, lng } = await getLatLng(geocoded[0]);
-                            const offset = 0.05;
-                            const leafletCoords = [
-                                [lat + offset, lng - offset],
-                                [lat + offset, lng + offset],
-                                [lat - offset, lng + offset],
-                                [lat - offset, lng - offset],
-                                [lat + offset, lng - offset]
-                            ];
-                            const shape = {
-                                type: "Feature",
-                                properties: {},
-                                geometry: {
-                                    type: "Polygon",
-                                    coordinates: [leafletCoords]
-                                }
-                            };
-                            setServiceAreas(prevAreas => [...prevAreas, shape]);
-                            setMapBounds(leafletCoords);
-                          }
-                        }
-                      },
-                      styles: {
-                        menu: (provided) => ({
-                          ...provided,
-                          zIndex: 9999,
-                        }),
-                      },
-                      isClearable: true,
-                    }}
-                  />
-                </Box>
-
-                </Box>
-                <Box flexGrow={1} w="100%">
-                  <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
-                    <ChangeView center={mapCenter} zoom={13} bounds={mapBounds} />
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
-                   <FeatureGroup ref={featureGroupRef}>
-  <EditControl
-    position="topright"
-    onCreated={onCreated}
-    onEdited={onEdited}
-    onDeleted={onDeleted}
-    draw={{
-      rectangle: false,
-      polyline: false,
-      marker: false,
-      circlemarker: false,
-    }}
-  />
-
-  {/* Render service areas directly */}
-  {serviceAreas.map((serviceArea, index) => {
-    if (serviceArea.geometry.type === "Polygon") {
-      return (
-        <Polygon
-          key={index}
-          positions={serviceArea.geometry.coordinates[0]}
-          pathOptions={{ color: "orange", weight: 2, fillOpacity: 0.2 }}
-        />
-      );
-    } else if (serviceArea.geometry.type === "Point") {
-      return (
-        <Circle
-          key={index}
-          center={[
-            serviceArea.geometry.coordinates[1],
-            serviceArea.geometry.coordinates[0],
-          ]}
-          radius={serviceArea.properties.radius || 1000}
-        />
-      );
-    }
-    return null;
-  })}
-</FeatureGroup>
-
-                  </MapContainer>
-                </Box>
-                <Flex p={4} justify="flex-end" w="100%">
-                  <Button onClick={handleSaveArea} colorScheme="orange" isLoading={loading}>Save Area</Button>
-                </Flex>
-              </VStack>
-            </ModalBody>
-          </ModalContent>
-        </Modal>
-      )}
+      <SetArea 
+        isOpen={mapModalOpen}
+        onClose={closeMapModal}
+        worker={selectedWorkerForArea}
+        onSave={handleSaveArea}
+        loading={loading}
+        companySettings={companySettings}
+      />
 
       {/* Delete confirmation modal */}
       {deleteModal.open && (
