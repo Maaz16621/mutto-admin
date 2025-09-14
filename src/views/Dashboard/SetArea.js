@@ -26,7 +26,7 @@ import { EditControl } from "react-leaflet-draw";
 import L from "leaflet";
 import GooglePlacesAutocomplete from 'react-google-places-autocomplete';
 window.L = L;
-const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
+const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app';
 
 // --- Helper component to change map view or fit bounds ---
 function MapView({ center, zoom, bounds }) {
