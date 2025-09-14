@@ -6,7 +6,7 @@ const deleteUserRoute = require('./deleteUser');
 const placeDetailsRoute = require('./placeDetails');
 const nominatimProxyRoute = require('./nominatimProxy');
 const googleToOsmRoute = require('./googleToOsm');
-const sendPushNotificationRoute = require('./sendPushNotification');
+
 
 const app = express();
 app.use(cors());
@@ -17,7 +17,7 @@ app.use('/api', deleteUserRoute);
 app.use('/api', placeDetailsRoute);
 app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
-app.use('/api', sendPushNotificationRoute);
+
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
