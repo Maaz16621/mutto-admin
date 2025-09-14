@@ -58,9 +58,27 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
   const clickTimeout = useRef(null);
 
   // --- Load worker service areas when modal opens ---
-  useEffect(() => {
-    if (!isOpen) return;
-    const initialAreas = worker?.serviceArea?.map((a, idx) => ({ ...a, id: a.id || `area-${idx}-${Date.now()}` })) || [];
+const [areasLoaded, setAreasLoaded] = useState(false);
+
+useEffect(() => {
+  if (!isOpen) return;
+
+  setAreasLoaded(false); // reset before fetching
+
+  const loadAreas = async () => {
+    let initialAreas = [];
+
+    if (worker?.serviceArea?.length) {
+      initialAreas = worker.serviceArea.map((a, idx) => {
+        const geometry = typeof a.geometry === "string" ? JSON.parse(a.geometry) : a.geometry;
+        return {
+          ...a,
+          id: a.id || `area-${idx}-${Date.now()}`,
+          geometry: geometry
+        };
+      });
+    }
+
     setAreas(initialAreas);
     setTimeout(() => {
       if (initialAreas.length) fitAllAreas(initialAreas);
@@ -69,8 +87,12 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
         setMapZoom(8);
         setMapBounds(null);
       }
-    }, 100);
-  }, [isOpen, worker]);
+      setAreasLoaded(true); // ✅ now ready
+    }, 200); // small delay so Leaflet initializes properly
+  };
+
+  loadAreas();
+}, [isOpen, worker]);
 
   // --- Handle place selection from Google Autocomplete ---
   const handlePlaceSelect = async (selectedPlace) => {
@@ -85,10 +107,22 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
         throw new Error(osmData.error || 'Failed to fetch OSM data.');
       }
 
+      let geometryToUse = osmData.geojson;
+      if (!geometryToUse) {
+        // If no detailed GeoJSON, use a rough estimate circle
+        const defaultRadius = 500; // meters, adjust as needed
+        geometryToUse = {
+          type: "Point",
+          coordinates: [osmData.lon, osmData.lat], // GeoJSON format: [lng, lat]
+          properties: { radius: defaultRadius }
+        };
+        toast({ title: "No detailed boundary found, using a circular estimate.", status: "info", position: "top-right" });
+      }
+
       const newArea = {
         id: osmData.osm_id, // Use OSM ID for uniqueness
         name: osmData.display_name,
-        geometry: osmData.geojson,
+        geometry: geometryToUse,
       };
 
       setAreas((prev) => [...prev, newArea]);
@@ -113,20 +147,49 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
 
 
   // --- Drawn shapes handlers ---
-  const handleCreated = (e) => {
-    const { layerType, layer } = e;
-    if (featureGroupRef.current) featureGroupRef.current.removeLayer(layer);
-    const now = Date.now();
-    let newArea = null;
+const handleCreated = (e) => {
+  const { layerType, layer } = e;
+  const now = Date.now();
+  let newArea = null;
 
-    if (layerType === "polygon") newArea = { id: `polygon-${now}`, name: `Drawn Polygon`, geometry: { type: "Polygon", coordinates: [layer.getLatLngs()[0].map(l => [l.lng, l.lat])] } };
-    else if (layerType === "rectangle") {
-      const b = layer.getBounds();
-      newArea = { id: `rect-${now}`, name: `Drawn Rectangle`, geometry: { type: "Polygon", coordinates: [[[b.getSouthWest().lng, b.getSouthWest().lat], [b.getNorthEast().lng, b.getSouthWest().lat], [b.getNorthEast().lng, b.getNorthEast().lat], [b.getSouthWest().lng, b.getNorthEast().lat], [b.getSouthWest().lng, b.getSouthWest().lat]]] } };
-    } else if (layerType === "circle") newArea = { id: `circle-${now}`, name: `Drawn Circle`, geometry: { type: "Point", coordinates: [layer.getLatLng().lng, layer.getLatLng().lat], properties: { radius: layer.getRadius() } } };
-    
-    if (newArea) setAreas((prev) => [...prev, newArea]);
-  };
+  if (layerType === "polygon")
+    newArea = {
+      id: `polygon-${now}`,
+      name: `Drawn Polygon`,
+      geometry: { type: "Polygon", coordinates: [layer.getLatLngs()[0].map(l => [l.lng, l.lat])] }
+    };
+  else if (layerType === "rectangle") {
+    const b = layer.getBounds();
+    newArea = {
+      id: `rect-${now}`,
+      name: `Drawn Rectangle`,
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          [b.getSouthWest().lng, b.getSouthWest().lat],
+          [b.getNorthEast().lng, b.getSouthWest().lat],
+          [b.getNorthEast().lng, b.getNorthEast().lat],
+          [b.getSouthWest().lng, b.getNorthEast().lat],
+          [b.getSouthWest().lng, b.getSouthWest().lat]
+        ]]
+      }
+    };
+  } else if (layerType === "circle") {
+    newArea = {
+      id: `circle-${now}`,
+      name: `Drawn Circle`,
+      geometry: { type: "Point", coordinates: [layer.getLatLng().lng, layer.getLatLng().lat], properties: { radius: layer.getRadius() } }
+    };
+  }
+
+  if (newArea) {
+    setAreas(prev => [...prev, newArea]);
+    // focus newly added shape
+    if (layer.getBounds) setMapBounds(layer.getBounds());
+    else if (layer.getLatLng) { setMapCenter(layer.getLatLng()); setMapZoom(14); }
+  }
+};
+
 
   const handleEdited = (e) => {
     const updatedGeometries = {};
@@ -154,49 +217,124 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
   };
 
   // --- FeatureGroup layer management ---
-  useEffect(() => {
+useEffect(() => {
+  let cancelled = false;
+  let tries = 0;
+  const maxTries = 20;
+
+  const populate = () => {
     const fg = featureGroupRef.current;
-    if (!fg) return;
+    if (!fg) {
+      // FeatureGroup not ready yet — try again a few times
+      if (tries++ < maxTries && !cancelled) {
+        setTimeout(populate, 100);
+      }
+      return;
+    }
+
+    // clear existing layers and rebuild from areas
     fg.clearLayers();
     areaLayerMap.current = {};
     layerToAreaMap.current = {};
+
     areas.forEach((a) => {
-      let layer;
-      const { type } = a.geometry;
-      if (type === "Polygon" || type === "MultiPolygon") layer = L.geoJSON(a.geometry);
-      else if (type === "Point") {
-        if (a.geometry.properties?.isCustomMarker) layer = L.marker([a.geometry.coordinates[1], a.geometry.coordinates[0]]);
-        else layer = L.circle([a.geometry.coordinates[1], a.geometry.coordinates[0]], { radius: a.geometry.properties?.radius || 1000 });
-      }
-      if (layer) {
-        fg.addLayer(layer);
-        areaLayerMap.current[a.id] = layer._leaflet_id;
-        layerToAreaMap.current[layer._leaflet_id] = a.id;
+      try {
+        if (!a?.geometry) return;
+        let layer = null;
+        const { type } = a.geometry;
+
+        if (type === "Polygon") {
+          // GeoJSON polygon -> Leaflet polygon (lat,lng)
+          const coords = (a.geometry.coordinates[0] || []).map(c => [c[1], c[0]]);
+          if (coords.length) layer = L.polygon(coords);
+        } else if (type === "MultiPolygon") {
+          // flatten first ring(s)
+          const coords = (a.geometry.coordinates || []).flatMap(p => (p[0] || []).map(c => [c[1], c[0]]));
+          if (coords.length) layer = L.polygon(coords);
+        } else if (type === "Point") {
+          const lat = a.geometry.coordinates[1];
+          const lng = a.geometry.coordinates[0];
+          if (a.geometry.properties?.isCustomMarker) layer = L.marker([lat, lng]);
+          else layer = L.circle([lat, lng], { radius: a.geometry.properties?.radius || 1000 });
+        }
+
+        if (layer) {
+          fg.addLayer(layer);
+          areaLayerMap.current[a.id] = layer._leaflet_id;
+          layerToAreaMap.current[layer._leaflet_id] = a.id;
+        }
+      } catch (err) {
+        console.error("Failed to add area layer", err, a);
       }
     });
-  }, [areas]);
 
-  // --- Tag Actions ---
-  const handleTagClick = (area) => {
-    if (clickTimeout.current) {
-      clearTimeout(clickTimeout.current);
-      clickTimeout.current = null;
-      setEditingTag({ id: area.id, name: area.name || "" });
-    } else {
-      clickTimeout.current = setTimeout(() => {
-        clickTimeout.current = null;
-        const layerId = areaLayerMap.current[area.id];
-        if (layerId && featureGroupRef.current) {
-          const layer = featureGroupRef.current.getLayer(layerId);
-          if (layer) {
-            if (layer.editing) layer.editing.enable();
-            if (layer.getBounds) setMapBounds(layer.getBounds());
-            else if (layer.getLatLng) { setMapCenter(layer.getLatLng()); setMapZoom(14); }
-          }
+    // optionally fit bounds if there are areas
+    if (!cancelled && areas.length) {
+      const allCoords = areas.flatMap(a => {
+        if (!a.geometry) return [];
+        if (a.geometry.type === "Polygon") return a.geometry.coordinates[0];
+        if (a.geometry.type === "MultiPolygon") return a.geometry.coordinates.flatMap(p => p[0]);
+        if (a.geometry.type === "Point") {
+          const center = L.latLng(a.geometry.coordinates[1], a.geometry.coordinates[0]);
+          const radius = a.geometry.properties?.radius || 1000;
+          const bounds = center.toBounds(radius);
+          return [[bounds.getSouthWest().lng, bounds.getSouthWest().lat], [bounds.getNorthEast().lng, bounds.getNorthEast().lat]];
         }
-      }, 250);
+        return [];
+      });
+      if (allCoords.length) {
+        setTimeout(() => {
+          if (!cancelled) setMapBounds(L.latLngBounds(allCoords.map(c => [c[1], c[0]])));
+        }, 50);
+      }
     }
   };
+
+  // only populate when we believe areas are loaded (your areasLoaded flag)
+  if (areasLoaded) populate();
+
+  return () => { cancelled = true; };
+}, [areasLoaded, areas]);
+
+
+
+  // --- Tag Actions ---
+const handleTagClick = (area) => {
+  if (clickTimeout.current) {
+    clearTimeout(clickTimeout.current);
+    clickTimeout.current = null;
+    setEditingTag({ id: area.id, name: area.name || "" });
+  } else {
+    clickTimeout.current = setTimeout(() => {
+      clickTimeout.current = null;
+      const layerId = areaLayerMap.current[area.id];
+      if (layerId && featureGroupRef.current) {
+        const layer = featureGroupRef.current.getLayer(layerId);
+        if (layer) {
+          // Focus the map on the shape
+          if (layer.getBounds) setMapBounds(layer.getBounds());
+          else if (layer.getLatLng) {
+            setMapCenter(layer.getLatLng());
+            setMapZoom(14);
+          }
+
+          // Enable edit handles on this layer
+          if (layer.editing) layer.editing.enable();
+
+          // 🔥 Also activate the edit toolbar so Save/Cancel shows up
+          if (featureGroupRef.current._map && featureGroupRef.current._map.editTools) {
+            // For leaflet-draw
+            const drawControl = featureGroupRef.current._map._controlContainer?.querySelector('.leaflet-draw-edit-edit');
+            if (drawControl) {
+              drawControl.click(); // simulate user clicking the "Edit" button
+            }
+          }
+        }
+      }
+    }, 250);
+  }
+};
+
 
   const renameTag = (id) => {
     if (!editingTag.name.trim()) return toast({ title: "Tag name cannot be empty", status: "warning" });
@@ -265,19 +403,52 @@ export default function SetArea({ isOpen, onClose, worker, onSave, loading }) {
                 </Flex>
               </Box>
               <Box w="100%" h="50vh" bg="gray.100">
-                <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: "100%", width: "100%" }}>
-                  <MapView center={mapCenter} zoom={mapZoom} bounds={mapBounds} />
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
-                  <FeatureGroup ref={featureGroupRef}>
-                    <EditControl position="topright" onCreated={handleCreated} onEdited={handleEdited} onDeleted={handleDeleted} draw={{ rectangle: true, circle: true, polygon: true, marker: false, polyline: false, circlemarker: false }} edit={{ edit: true, remove: true }} />
-                  </FeatureGroup>
-                </MapContainer>
+           <Box w="100%" h="50vh" bg="gray.100">
+  {!areasLoaded ? (
+    <Flex align="center" justify="center" h="100%">
+      <Spinner size="lg" />
+    </Flex>
+  ) : (
+    <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: "100%", width: "100%" }}>
+      <MapView center={mapCenter} zoom={mapZoom} bounds={mapBounds} />
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; OpenStreetMap contributors'
+      />
+      <FeatureGroup ref={featureGroupRef}>
+        <EditControl
+          position="topright"
+          onCreated={handleCreated}
+          onEdited={handleEdited}
+          onDeleted={handleDeleted}
+          draw={{ rectangle: true, circle: true, polygon: true, marker: false, polyline: false, circlemarker: false }}
+          edit={{ edit: true, remove: false }}
+        />
+      </FeatureGroup>
+    </MapContainer>
+  )}
+</Box>
+
               </Box>
             </VStack>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>Cancel</Button>
-            <Button colorScheme="orange" isLoading={loading} onClick={() => onSave(areas)}>Save Areas</Button>
+          <Button
+  colorScheme="orange"
+  isLoading={loading}
+  onClick={() =>
+    onSave(
+      areas.map(a => ({
+        ...a,
+        geometry: JSON.stringify(a.geometry) // 👈 flatten nested arrays
+      }))
+    )
+  }
+>
+  Save Areas
+</Button>
+
           </ModalFooter>
         </ModalContent>
       </Modal>

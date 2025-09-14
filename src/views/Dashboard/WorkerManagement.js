@@ -14,7 +14,7 @@ import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody";
 import SetArea from "./SetArea";
 
-const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app';
+const API_BASE_URL = process.env.NODE_ENV === 'development' ? 'https://mutto-api--mutto-84d97.asia-east1.hosted.app' : 'https://mutto-api--mutto-84d97.asia-east1.hosted.app';
 
 function ChangeView({ center, zoom, bounds }) {
   const map = useMap();

@@ -18,8 +18,8 @@ router.get('/googleToOsm', async (req, res) => {
   }
 
   try {
-    // 1. Get Lat/Lng from Google Places Details API
-    const googleDetailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=name,geometry&key=${googleApiKey}`; // Request name field
+    // 1. Get Lat/Lng and address components from Google Places Details API
+    const googleDetailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=name,geometry,address_components&key=${googleApiKey}`;
     const googleResponse = await fetch(googleDetailsUrl);
     const googleData = await googleResponse.json();
 
@@ -27,14 +27,25 @@ router.get('/googleToOsm', async (req, res) => {
       return res.status(404).json({ error: 'Google Place details not found or missing geometry.' });
     }
 
-    const { name } = googleData.result; // Get name
+    const { name, address_components } = googleData.result;
     const { lat, lng } = googleData.result.geometry.location;
+
+    let countryCode = null;
+    if (address_components) {
+      const countryComponent = address_components.find(comp => comp.types.includes('country'));
+      if (countryComponent) {
+        countryCode = countryComponent.short_name.toLowerCase();
+      }
+    }
 
     let osmData = null;
 
-    // 2. Prioritize Nominatim Search by Name
+    // 2. Prioritize Nominatim Search by Name (with country filter)
     if (name) {
-      const nominatimSearchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&polygon_geojson=1&accept-language=en`;
+      let nominatimSearchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&polygon_geojson=1&accept-language=en`;
+      if (countryCode) {
+        nominatimSearchUrl += `&countrycodes=${countryCode}`;
+      }
       const nominatimSearchResponse = await fetch(nominatimSearchUrl, {
         headers: {
           'User-Agent': 'MuttoCarWashApp/1.0 (mutto.app)'
@@ -42,7 +53,6 @@ router.get('/googleToOsm', async (req, res) => {
       });
       const nominatimSearchResults = await nominatimSearchResponse.json();
 
-      // Find the first result with a polygon
       const polygonResult = nominatimSearchResults.find(item => item.geojson && (item.geojson.type === "Polygon" || item.geojson.type === "MultiPolygon"));
       if (polygonResult) {
         osmData = polygonResult;
@@ -63,8 +73,49 @@ router.get('/googleToOsm', async (req, res) => {
       }
     }
 
+    // 4. Final Fallback: Overpass API for administrative boundaries around the point
     if (!osmData) {
-      return res.status(404).json({ error: 'No detailed OSM geometry found for this place.' });
+      try {
+        const overpassQuery = `
+          [out:json];
+          is_in(${lat},${lng});
+          area._[admin_level];
+          out geom;
+        `;
+        const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+        const overpassResponse = await fetch(overpassUrl);
+        const overpassData = await overpassResponse.json();
+
+        if (overpassData.elements && overpassData.elements.length > 0) {
+          const element = overpassData.elements[0];
+          if (element.type === "relation" && element.members) {
+            const coordinates = element.members
+              .filter(m => m.type === "way" && m.geometry)
+              .map(m => m.geometry.map(coord => [coord.lon, coord.lat]));
+            if (coordinates.length > 0) {
+              osmData = { geojson: { type: "MultiPolygon", coordinates: [coordinates] }, display_name: element.tags?.name || "Unnamed Area" };
+            }
+          } else if (element.type === "way" && element.geometry) {
+            const coordinates = element.geometry.map(coord => [coord.lon, coord.lat]);
+            osmData = { geojson: { type: "Polygon", coordinates: [coordinates] }, display_name: element.tags?.name || "Unnamed Area" };
+          }
+        }
+      } catch (overpassErr) {
+        console.error("Error fetching from Overpass API:", overpassErr);
+      }
+    }
+
+    if (!osmData || !osmData.geojson) {
+      const defaultRadius = 500; // meters
+      osmData = {
+        osm_id: googlePlaceId, // Use Google Place ID as fallback OSM ID
+        display_name: name, // Use Google Place name as fallback display name
+        geojson: {
+          type: "Point",
+          coordinates: [lng, lat], // GeoJSON format: [lng, lat]
+          properties: { radius: defaultRadius }
+        }
+      };
     }
 
     res.json(osmData);

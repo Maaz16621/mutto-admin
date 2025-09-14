@@ -1,14 +1,9 @@
-TypeError: functions.pubsub.schedule is not a function
-    at Object.<anonymous> (D:\Data\Projects\Mutto Car Wash\functions\index.js:544:52)
-    at Module._compile (node:internal/modules/cjs/loader:1562:14)
-    at Object..js (node:internal/modules/cjs/loader:1699:10)
-    at Module.load (node:internal/modules/cjs/loader:1313:32)
-    at Function._load (node:internal/modules/cjs/loader:1123:12)
-    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
-    at Module.require (node:internal/modules/cjs/loader:1335:12)
-    at require (node:internal/modules/helpers:136:16)
-    at loadModule (D:\Data\Projects\Mutto Car Wash\functions\node_modules\firebase-functions\lib\runtime\loader.js:40:16)
-
-
-Error: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error
+ncaught TypeError: Cannot read properties of undefined (reading 'disable')
+    at NewClass._disableLayerEdit (leaflet.draw.js:9:1)
+    at NewClass.eachLayer (LayerGroup.js:122:1)
+    at NewClass.removeHooks (leaflet.draw.js:9:1)
+    at NewClass.disable (Handler.js:33:1)
+    at NewClass.disable (leaflet.draw.js:9:1)
+    at NewClass.disable (leaflet.draw.js:9:1)
+    at NewClass.disable (leaflet.draw.js:9:1)
+    at HTMLAnchorElement.handler (DomEvent.js:108:1)
