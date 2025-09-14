@@ -19,7 +19,5 @@ app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
 
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Admin API server running on port ${PORT}`);
-});
+// For App Hosting, export the app directly
+module.exports = app;
