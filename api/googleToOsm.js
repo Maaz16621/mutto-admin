@@ -6,7 +6,7 @@ const router = express.Router();
 // GET /api/googleToOsm?googlePlaceId=...
 router.get('/googleToOsm', async (req, res) => {
   const { googlePlaceId } = req.query;
-  const googleApiKey = "AIzaSyAcaEIbX_s-ZYhEkBbwKQBLuuX2GTBGISs";
+  const googleApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
   if (!googlePlaceId) {
     return res.status(400).json({ error: 'Missing googlePlaceId' });
