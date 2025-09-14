@@ -1,2 +1,14 @@
-An error occurred in your rollout
-generic::failed_precondition: Revision 'mutto-api-build-2025-09-13-004' is not ready and cannot serve traffic. The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information. Logs URL: https://console.cloud.google.com/logs/viewer?project=mutto-84d97&resource=cloud_run_revision/service_name/mutto-api/revision_name/mutto-api-build-2025-09-13-004&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22mutto-api%22%0Aresource.labels.revision_name%3D%22mutto-api-build-2025-09-13-004%22 For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+TypeError: functions.pubsub.schedule is not a function
+    at Object.<anonymous> (D:\Data\Projects\Mutto Car Wash\functions\index.js:544:52)
+    at Module._compile (node:internal/modules/cjs/loader:1562:14)
+    at Object..js (node:internal/modules/cjs/loader:1699:10)
+    at Module.load (node:internal/modules/cjs/loader:1313:32)
+    at Function._load (node:internal/modules/cjs/loader:1123:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:internal/modules/helpers:136:16)
+    at loadModule (D:\Data\Projects\Mutto Car Wash\functions\node_modules\firebase-functions\lib\runtime\loader.js:40:16)
+
+
+Error: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error

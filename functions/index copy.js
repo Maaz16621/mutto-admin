@@ -1,6 +1,4 @@
-const functions = require('firebase-functions/v1');
-const { firestore } = require('firebase-functions/v1');
-const { pubsub } = require('firebase-functions/v1');
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(functions.config().stripe.secret_key);
 const axios = require('axios');
@@ -302,7 +300,7 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
   }
 });
 
-exports.handleBookingNotification = firestore
+exports.handleBookingNotification = functions.firestore
   .document('bookings/{bookingId}')
   .onWrite(async (change, context) => {
     console.log(`handleBookingNotification triggered for bookingId: ${context.params.bookingId}`)
@@ -446,7 +444,7 @@ exports.handleBookingNotification = firestore
     return null;
   });
 
-exports.sendPushOnNewNotification = firestore
+exports.sendPushOnNewNotification = functions.firestore
   .document('notifications/{notificationId}')
   .onCreate(async (snapshot, context) => {
     const notificationData = snapshot.data();
@@ -542,7 +540,7 @@ const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-exports.scheduleBookingReminder = pubsub.schedule('every 60 minutes').onRun(async (context) => {
+exports.scheduleBookingReminder = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
   console.log('Running scheduleBookingReminder...');
 
   const nowUAE = dayjs().tz('Asia/Dubai');
@@ -621,7 +619,7 @@ exports.scheduleBookingReminder = pubsub.schedule('every 60 minutes').onRun(asyn
   return null;
 });
 
-exports.sendChatNotification = firestore
+exports.sendChatNotification = functions.firestore
   .document('chats/{chatId}/messages/{messageId}')
   .onCreate(async (snapshot, context) => {
     // Get the newly created message data
