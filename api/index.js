@@ -19,5 +19,12 @@ app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
 
 
-// For App Hosting, export the app directly
-module.exports = app;
+
+app.get("/", (req, res) => {
+  res.send("✅ Cloud Run is working!");
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Listening on port ${PORT}`);
+});
