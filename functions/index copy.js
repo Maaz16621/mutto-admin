@@ -712,3 +712,163 @@ exports.sendChatNotification = functions.firestore
       console.log(`Recipient ${recipientId} not found or does not have a push token.`);
     }
   });
+
+  exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'The function must be called while authenticated.'
+      );
+    }
+  
+    const { serviceId, dateString, selectedAddress } = data;
+  
+    if (!serviceId || !dateString || !selectedAddress) {
+      throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
+    }
+  
+    try {
+      // Fetch all necessary data from Firestore
+      const settingsRef = admin.firestore().collection('settings').doc('appSettings');
+      const serviceRef = admin.firestore().collection('services').doc(serviceId);
+      const workersCollection = admin.firestore().collection('workers');
+      
+      const [settingsSnap, serviceSnap, workerSnapshot] = await Promise.all([
+          settingsRef.get(),
+          serviceRef.get(),
+          workersCollection.get()
+      ]);
+  
+      if (!settingsSnap.exists) {
+          throw new functions.https.HttpsError('not-found', 'App settings not found.');
+      }
+      if (!serviceSnap.exists) {
+          throw new functions.https.HttpsError('not-found', 'Service data not found.');
+      }
+  
+      const appSettings = settingsSnap.data();
+      const serviceData = { id: serviceSnap.id, ...serviceSnap.data() };
+      const workers = workerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+      const [year, month, day] = dateString.split('-').map(Number);
+      const selectedDateObj = new Date(year, month - 1, day);
+      const dayOfWeek = selectedDateObj.getDay();
+  
+      // Fetch existing bookings for the selected date
+      const bookingsQuery = admin.firestore().collection('bookings')
+        .where('selectedDate', '==', dateString)
+        .where('status', '==', 'confirmed');
+      const bookingsSnapshot = await bookingsQuery.get();
+      const existingBookings = bookingsSnapshot.docs.map(doc => doc.data());
+  
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const currentDayName = dayNames[dayOfWeek];
+  
+      const slotsMap = new Map();
+  
+      workers.forEach(worker => {
+        if (!worker.assignedServices || !Array.isArray(worker.assignedServices) || !worker.assignedServices.includes(serviceData.id)) {
+          return;
+        }
+  
+        if (worker.serviceArea && worker.serviceArea.geometry && Array.isArray(worker.serviceArea.geometry.coordinates) && worker.serviceArea.geometry.coordinates.length >= 2 && worker.serviceArea.properties && typeof worker.serviceArea.properties.radius === 'number' && selectedAddress && typeof selectedAddress.latitude === 'number' && typeof selectedAddress.longitude === 'number') {
+          const workerLat = worker.serviceArea.geometry.coordinates[1];
+          const workerLon = worker.serviceArea.geometry.coordinates[0];
+          const radius = worker.serviceArea.properties.radius;
+          const radiusKm = radius / 1000;
+  
+          const distance = haversineDistance(
+            selectedAddress.latitude,
+            selectedAddress.longitude,
+            workerLat,
+            workerLon
+          );
+  
+          if (distance > radiusKm) {
+            return;
+          }
+        } else {
+          return;
+        }
+  
+        if (worker.enabled === false) {
+          return;
+        }
+  
+        if (worker.offDates && Array.isArray(worker.offDates) && worker.offDates.includes(dateString)) {
+          return;
+        }
+  
+        let workerStartTime = '';
+        let workerEndTime = '';
+        let workerInterval = worker.interval || 60;
+  
+        const workerSpecialHoursMap = worker.specialWorkingHours && Array.isArray(worker.specialWorkingHours) ?
+          worker.specialWorkingHours.reduce((acc, curr) => {
+            if (curr.date) acc[curr.date] = curr;
+            return acc;
+          }, {}) : {};
+  
+        if (workerSpecialHoursMap[dateString]) {
+          const specialHours = workerSpecialHoursMap[dateString];
+          workerStartTime = specialHours.start;
+          workerEndTime = specialHours.end;
+          workerInterval = specialHours.interval || workerInterval;
+        } else if (worker.dailyWorkingHours && worker.dailyWorkingHours[currentDayName]) {
+          const dailyHours = worker.dailyWorkingHours[currentDayName];
+          if (dailyHours.enabled) {
+            workerStartTime = dailyHours.start;
+            workerEndTime = dailyHours.end;
+            workerInterval = dailyHours.interval || workerInterval;
+          } else {
+            return;
+          }
+        } else {
+          return;
+        }
+  
+        if (workerStartTime && workerEndTime && workerInterval) {
+          const slots = generateTimeSlots(workerStartTime, workerEndTime, workerInterval);
+          slots.forEach(slot => {
+              const isBooked = existingBookings.some(booking =>
+                  booking.workerId === worker.id && booking.selectedTime === slot
+              );
+  
+              if (isBooked) {
+                  return;
+              }
+  
+            const existingWorkers = slotsMap.get(slot) || [];
+            if (!existingWorkers.includes(worker.id)) {
+              slotsMap.set(slot, [...existingWorkers, worker.id]);
+            }
+          });
+        }
+      });
+  
+      const sortedSlots = Array.from(slotsMap.keys()).sort((a, b) => {
+        const parseTime = (timeStr) => {
+          const [time, ampm] = timeStr.split(' ');
+          let [hours, minutes] = time.split(':').map(Number);
+          if (ampm === 'PM' && hours !== 12) hours += 12;
+          if (ampm === 'AM' && hours === 12) hours = 0;
+          return hours * 60 + minutes;
+        };
+        const timeA = parseTime(a.split(' to ')[0]);
+        const timeB = parseTime(b.split(' to ')[0]);
+        return timeA - timeB;
+      });
+      
+      // Convert Map to an object for JSON serialization
+      const timeSlotsToWorkersMapObject = Object.fromEntries(slotsMap);
+  
+      return {
+          availableTimeSlots: sortedSlots,
+          timeSlotsToWorkersMap: timeSlotsToWorkersMapObject
+      };
+  
+    } catch (error) {
+      console.error("Error fetching available time slots:", error);
+      throw new functions.https.HttpsError('internal', 'Failed to get available time slots.', error.message);
+    }
+  });

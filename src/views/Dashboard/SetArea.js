@@ -127,9 +127,6 @@ useEffect(() => {
 
       setAreas((prev) => [...prev, newArea]);
 
-      const layer = L.geoJSON(newArea.geometry);
-      setMapBounds(layer.getBounds());
-
     } catch (err) {
       console.error(err);
       toast({ title: "Error fetching area boundary", description: err.message, status: "error", position: "top-right" });
@@ -184,9 +181,6 @@ const handleCreated = (e) => {
 
   if (newArea) {
     setAreas(prev => [...prev, newArea]);
-    // focus newly added shape
-    if (layer.getBounds) setMapBounds(layer.getBounds());
-    else if (layer.getLatLng) { setMapCenter(layer.getLatLng()); setMapZoom(14); }
   }
 };
 
@@ -268,26 +262,7 @@ useEffect(() => {
       }
     });
 
-    // optionally fit bounds if there are areas
-    if (!cancelled && areas.length) {
-      const allCoords = areas.flatMap(a => {
-        if (!a.geometry) return [];
-        if (a.geometry.type === "Polygon") return a.geometry.coordinates[0];
-        if (a.geometry.type === "MultiPolygon") return a.geometry.coordinates.flatMap(p => p[0]);
-        if (a.geometry.type === "Point") {
-          const center = L.latLng(a.geometry.coordinates[1], a.geometry.coordinates[0]);
-          const radius = a.geometry.properties?.radius || 1000;
-          const bounds = center.toBounds(radius);
-          return [[bounds.getSouthWest().lng, bounds.getSouthWest().lat], [bounds.getNorthEast().lng, bounds.getNorthEast().lat]];
-        }
-        return [];
-      });
-      if (allCoords.length) {
-        setTimeout(() => {
-          if (!cancelled) setMapBounds(L.latLngBounds(allCoords.map(c => [c[1], c[0]])));
-        }, 50);
-      }
-    }
+    
   };
 
   // only populate when we believe areas are loaded (your areasLoaded flag)
@@ -437,7 +412,7 @@ const handleTagClick = (area) => {
           <Button
   colorScheme="orange"
   isLoading={loading}
-  onClick={() =>
+    onClick={() =>
     onSave(
       areas.map(a => ({
         ...a,
