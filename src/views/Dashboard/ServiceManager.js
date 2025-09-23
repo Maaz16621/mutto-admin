@@ -62,6 +62,7 @@ export default function ServiceManager() {
     graceTime: "",
     bufferTime: "",
     active: true,
+    availableSoon: false,
     imageUrls: [],
     mainImageUrl: "",
     relatedServices: []
@@ -171,6 +172,7 @@ export default function ServiceManager() {
         graceTime: form.graceTime ? Number(form.graceTime) : 0,
         bufferTime: form.bufferTime ? Number(form.bufferTime) : 0,
         active: !!form.active,
+        availableSoon: !!form.availableSoon,
         imageUrls: imageUrls,
         mainImageUrl: mainImageUrl,
         updatedAt: serverTimestamp(),
@@ -188,7 +190,7 @@ export default function ServiceManager() {
       }
       fetchServices();
       onClose();
-      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], mainImageUrl: "", relatedServices: [] });
+      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [] });
       setImageFiles([]);
       setImagePreviews([]);
       setUploadProgress(0);
@@ -213,11 +215,12 @@ export default function ServiceManager() {
           graceTime: service.graceTime || "",
           bufferTime: service.bufferTime || "",
           active: service.active !== undefined ? service.active : true,
+          availableSoon: service.availableSoon !== undefined ? service.availableSoon : false,
           imageUrls: service.imageUrls || [],
           mainImageUrl: service.mainImageUrl || "",
           relatedServices: service.relatedServices || [],
         }
-      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, imageUrls: [], mainImageUrl: "", relatedServices: [] }
+      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [] }
     );
     setImageFiles([]);
     setImagePreviews(service && service.imageUrls ? service.imageUrls : []);
@@ -512,6 +515,10 @@ export default function ServiceManager() {
                   <FormControl mb={3} display="flex" alignItems="center">
                     <FormLabel mb={0}>Active</FormLabel>
                     <Switch isChecked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
+                  </FormControl>
+                  <FormControl mb={3} display="flex" alignItems="center">
+                    <FormLabel mb={0}>Available Soon</FormLabel>
+                    <Switch isChecked={form.availableSoon} onChange={e => setForm(f => ({ ...f, availableSoon: e.target.checked }))} />
                   </FormControl>
                   <Box gridColumn={{ base: '1', md: '1 / span 2' }}>
                     <FormControl mb={3}>

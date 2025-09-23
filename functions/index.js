@@ -71,11 +71,11 @@ exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
   }
 });
 
-const sendNotification = async (tokens, title, body, data, users, userType) => {
+const sendNotification = async (tokens, title, body, data, users, userType, createRecord = true) => {
   // Normalize userType
   const normalizedType = userType.toLowerCase();
   
-  if (['user', 'users', 'worker', 'workers', 'staff'].includes(normalizedType)) {
+  if (['user', 'users', 'worker', 'workers', 'staff', 'all'].includes(normalizedType)) {
     const messages = tokens.map(token => ({
       to: token,
       sound: 'default',
@@ -85,6 +85,8 @@ const sendNotification = async (tokens, title, body, data, users, userType) => {
     }));
 
     for (const message of messages) {
+      let notificationStatus = 'sent';
+      let errorMessage = null;
       try {
         await axios.post('https://exp.host/--/api/v2/push/send', message, {
           headers: {
@@ -96,10 +98,51 @@ const sendNotification = async (tokens, title, body, data, users, userType) => {
         console.log(`Successfully sent push notification to ${message.to}`);
       } catch (error) {
         console.error(`Error sending push notification to ${message.to}:`, error);
+        notificationStatus = 'failed';
+        errorMessage = error.message;
+      } finally {
+        if (createRecord) {
+          // Create a record in Firestore for each notification sent
+          try {
+            await admin.firestore().collection('notifications').add({
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              title: title,
+              body: body,
+              recipientToken: message.to,
+              recipientUserIds: users, // Assuming 'users' contains an array of user IDs
+              userType: userType,
+              status: notificationStatus,
+              error: errorMessage,
+              data: data, // Include any additional data passed with the notification
+            });
+            console.log(`Notification record created for ${message.to} with status: ${notificationStatus}`);
+          } catch (firestoreError) {
+            console.error(`Error creating notification record for ${message.to}:`, firestoreError);
+          }
+        }
       }
     }
   } else {
     console.log(`Skipping push notifications for userType: ${userType}`);
+    if (createRecord) {
+      // Still create a record even if push notification is skipped due to userType
+      try {
+        await admin.firestore().collection('notifications').add({
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          title: title,
+          body: body,
+          recipientToken: null, // No specific token if skipped
+          recipientUserIds: users,
+          userType: userType,
+          status: 'skipped',
+          error: 'Push notifications skipped for this user type.',
+          data: data,
+        });
+        console.log(`Notification record created with status: skipped for userType: ${userType}`);
+      } catch (firestoreError) {
+        console.error(`Error creating notification record for skipped userType: ${userType}:`, firestoreError);
+      }
+    }
   }
 };
 
@@ -135,37 +178,22 @@ function isPointInPolygon(point, polygon) {
   return inside;
 }
 
-const generateTimeSlots = (startTime, endTime, interval) => {
+const generateTimeSlots = (startTime, endTime, interval, bufferTime = 0) => {
   const slots = [];
-  let [startHour, startMinute] = startTime.split(':').map(Number);
-  let [endHour, endMinute] = endTime.split(':').map(Number);
+  let current = dayjs(startTime, "hh:mm A");
+  const end = dayjs(endTime, "hh:mm A");
 
-  let current = new Date();
-  current.setHours(startHour, startMinute, 0, 0);
+  while (current.isBefore(end)) {
+    const next = current.add(interval, "minute").add(bufferTime, "minute");
+    if (next.isAfter(end) && !next.isSame(end, 'minute')) break; // Ensure the last slot doesn't go past endTime significantly
 
-  let end = new Date();
-  end.setHours(endHour, endMinute, 0, 0);
-
-  while (current.getTime() < end.getTime()) {
-    const next = new Date(current.getTime() + interval * 60 * 1000);
-    if (next.getTime() > end.getTime()) break;
-
-    const formatTime = (date) => {
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
-      const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
-      return `${formattedHours}:${formattedMinutes} ${ampm}`;
-    };
-
-    slots.push(`${formatTime(current)} to ${formatTime(next)}`);
-    current = next;
+    slots.push(`${formatTime(current)} to ${formatTime(next.subtract(bufferTime, "minute"))}`);
+    current = current.add(interval, "minute");
   }
   return slots;
 };
 
-exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => {
+exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
       'unauthenticated',
@@ -173,11 +201,13 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
     );
   }
 
-  const { serviceId, dateString, selectedAddress } = data;
+  const { serviceId, dateString, selectedAddress, bufferTime = 0 } = data;
 
   if (!serviceId || !dateString || !selectedAddress) {
     throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
   }
+
+  console.log('getAvailableTimeSlots called with:', { serviceId, dateString, selectedAddress });
 
   try {
     // Fetch all necessary data from Firestore
@@ -201,6 +231,8 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
     const appSettings = settingsSnap.data();
     const serviceData = { id: serviceSnap.id, ...serviceSnap.data() };
     const workers = workerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    console.log(`Found ${workers.length} workers.`);
 
     const [year, month, day] = dateString.split('-').map(Number);
     const selectedDateObj = new Date(year, month - 1, day);
@@ -219,7 +251,10 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
     const slotsMap = new Map();
 
     workers.forEach(worker => {
+      console.log(`Processing worker ${worker.id}`);
+
       if (!worker.assignedServices || !Array.isArray(worker.assignedServices) || !worker.assignedServices.includes(serviceData.id)) {
+        console.log(`Worker ${worker.id} skipped: not assigned to service ${serviceData.id}`);
         return;
       }
 
@@ -229,8 +264,15 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
         const customerLon = selectedAddress.longitude;
         const customerPoint = [customerLon, customerLat]; // GeoJSON format: [lng, lat]
 
-        const isCustomerInAnyServiceArea = worker.serviceArea.some(area => {
-          if (!area.geometry) return false;
+        console.log(`Worker ${worker.id} serviceArea:`, JSON.stringify(worker.serviceArea, null, 2));
+        console.log(`Selected address for worker ${worker.id}:`, JSON.stringify(selectedAddress, null, 2));
+
+        const isCustomerInAnyServiceArea = worker.serviceArea.some((area, index) => {
+          console.log(`Checking area ${index} for worker ${worker.id}`);
+          if (!area.geometry) {
+            console.log(`Area ${index} for worker ${worker.id} has no geometry.`);
+            return false;
+          }
 
           let geometry = area.geometry;
           if (typeof geometry === 'string') {
@@ -246,6 +288,8 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
             console.warn(`Invalid serviceArea geometry format for worker ${worker.id}:`, geometry);
             return false;
           }
+          
+          console.log(`Area ${index} for worker ${worker.id} has geometry type: ${geometry.type}`);
 
           if (geometry.type === 'Point' && geometry.properties && typeof geometry.properties.radius === 'number') {
             const workerLat = geometry.coordinates[1];
@@ -253,29 +297,41 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
             const radius = geometry.properties.radius; // in meters
             const radiusKm = radius / 1000;
             const distance = haversineDistance(customerLat, customerLon, workerLat, workerLon);
-            return distance <= radiusKm;
+            const isInArea = distance <= radiusKm;
+            console.log(`Worker ${worker.id} area ${index} (Point): distance=${distance}km, radius=${radiusKm}km, inArea=${isInArea}`);
+            return isInArea;
           } else if (geometry.type === 'Polygon') {
-            return isPointInPolygon(customerPoint, geometry.coordinates[0]);
+            const isInArea = isPointInPolygon(customerPoint, geometry.coordinates[0]);
+            console.log(`Worker ${worker.id} area ${index} (Polygon): inArea=${isInArea}`);
+            return isInArea;
           } else if (geometry.type === 'MultiPolygon') {
-            return geometry.coordinates.some(polygonCoords => isPointInPolygon(customerPoint, polygonCoords[0]));
+            const isInArea = geometry.coordinates.some(polygonCoords => isPointInPolygon(customerPoint, polygonCoords[0]));
+            console.log(`Worker ${worker.id} area ${index} (MultiPolygon): inArea=${isInArea}`);
+            return isInArea;
           }
 
+          console.log(`Area ${index} for worker ${worker.id} has unknown geometry type.`);
           return false;
         });
 
+        console.log(`Worker ${worker.id} isCustomerInAnyServiceArea: ${isCustomerInAnyServiceArea}`);
         if (!isCustomerInAnyServiceArea) {
+          console.log(`Worker ${worker.id} skipped: customer not in any service area.`);
           return; // Customer is not in any of the worker's service areas
         }
       } else {
+        console.log(`Worker ${worker.id} skipped: no service area defined, invalid address, or serviceArea is not an array or is empty. serviceArea: ${JSON.stringify(worker.serviceArea)}`);
         // If worker has no service area defined, or invalid format, skip them
         return;
       }
 
       if (worker.enabled === false) {
+        console.log(`Worker ${worker.id} skipped: disabled.`);
         return;
       }
 
       if (worker.offDates && Array.isArray(worker.offDates) && worker.offDates.includes(dateString)) {
+        console.log(`Worker ${worker.id} skipped: off date on ${dateString}.`);
         return;
       }
 
@@ -301,20 +357,39 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
           workerEndTime = dailyHours.end;
           workerInterval = dailyHours.interval || workerInterval;
         } else {
+          console.log(`Worker ${worker.id} skipped: not working on ${currentDayName}.`);
           return;
         }
       } else {
+        console.log(`Worker ${worker.id} skipped: no working hours defined for ${currentDayName}.`);
         return;
       }
 
       if (workerStartTime && workerEndTime && workerInterval) {
-        const slots = generateTimeSlots(workerStartTime, workerEndTime, workerInterval);
+        const slots = generateTimeSlots(workerStartTime, workerEndTime, workerInterval, bufferTime);
         slots.forEach(slot => {
-            const isBooked = existingBookings.some(booking =>
-                booking.workerId === worker.id && booking.selectedTime === slot
-            );
+            const [slotStartStr, slotEndStr] = slot.split(' to ');
+            const slotStart = dayjs(`${dateString} ${slotStartStr}`, 'YYYY-MM-DD hh:mm A');
+            const slotEnd = dayjs(`${dateString} ${slotEndStr}`, 'YYYY-MM-DD hh:mm A');
+
+            const isBooked = existingBookings.some(booking => {
+                if (booking.workerId !== worker.id) return false;
+
+                const [bookingStartStr, bookingEndStr] = booking.selectedTime.split(' to ');
+                const bookingStart = dayjs(`${dateString} ${bookingStartStr}`, 'YYYY-MM-DD hh:mm A');
+                const bookingEnd = dayjs(`${dateString} ${bookingEndStr}`, 'YYYY-MM-DD hh:mm A');
+
+                // Check for overlap considering bufferTime
+                // A slot is booked if its start time is before the booking's end time + buffer
+                // AND its end time + buffer is after the booking's start time
+                return (
+                    slotStart.isBefore(bookingEnd.add(booking.bufferTime || 0, 'minute')) &&
+                    slotEnd.add(bufferTime, 'minute').isAfter(bookingStart)
+                );
+            });
 
             if (isBooked) {
+                console.log(`Slot ${slot} for worker ${worker.id} is already booked.`);
                 return;
             }
 
@@ -339,6 +414,8 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
       return timeA - timeB;
     });
     
+    console.log(`Returning ${sortedSlots.length} available slots.`);
+
     // Convert Map to an object for JSON serialization
     const timeSlotsToWorkersMapObject = Object.fromEntries(slotsMap);
 
@@ -352,184 +429,7 @@ exports.getAvailableTimeSlots = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('internal', 'Failed to get available time slots.', error.message);
   }
 });
-exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      'unauthenticated',
-      'The function must be called while authenticated.'
-    );
-  }
 
-  const { serviceId, dateString, selectedAddress } = data;
-
-  if (!serviceId || !dateString || !selectedAddress) {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
-  }
-
-  try {
-    // Fetch all necessary data from Firestore
-    const settingsRef = admin.firestore().collection('settings').doc('appSettings');
-    const serviceRef = admin.firestore().collection('services').doc(serviceId);
-    const workersCollection = admin.firestore().collection('workers');
-    
-    const [settingsSnap, serviceSnap, workerSnapshot] = await Promise.all([
-        settingsRef.get(),
-        serviceRef.get(),
-        workersCollection.get()
-    ]);
-
-    if (!settingsSnap.exists) {
-        throw new functions.https.HttpsError('not-found', 'App settings not found.');
-    }
-    if (!serviceSnap.exists) {
-        throw new functions.https.HttpsError('not-found', 'Service data not found.');
-    }
-
-    const appSettings = settingsSnap.data();
-    const serviceData = { id: serviceSnap.id, ...serviceSnap.data() };
-    const workers = workerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const [year, month, day] = dateString.split('-').map(Number);
-    const selectedDateObj = new Date(year, month - 1, day);
-    const dayOfWeek = selectedDateObj.getDay();
-
-    // Fetch existing bookings for the selected date
-    const bookingsQuery = admin.firestore().collection('bookings')
-      .where('selectedDate', '==', dateString)
-      .where('status', '==', 'confirmed');
-    const bookingsSnapshot = await bookingsQuery.get();
-    const existingBookings = bookingsSnapshot.docs.map(doc => doc.data());
-
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const currentDayName = dayNames[dayOfWeek];
-
-    const slotsMap = new Map();
-
-    workers.forEach(worker => {
-      if (!worker.assignedServices || !Array.isArray(worker.assignedServices) || !worker.assignedServices.includes(serviceData.id)) {
-        return;
-      }
-
-      if (Array.isArray(worker.serviceArea) && worker.serviceArea.length > 0 && selectedAddress && typeof selectedAddress.latitude === 'number' && typeof selectedAddress.longitude === 'number') {
-        const isCustomerInAnyServiceArea = worker.serviceArea.some(area => {
-          if (!area.geometry) return false;
-
-          let geometry = area.geometry;
-          if (typeof geometry === 'string') {
-            try {
-              geometry = JSON.parse(geometry);
-            } catch (e) {
-              console.error(`Error parsing serviceArea geometry string for worker ${worker.id}:`, e);
-              return false;
-            }
-          }
-
-          if (geometry && geometry.type === 'Point' && Array.isArray(geometry.coordinates) && geometry.coordinates.length >= 2 && geometry.properties && typeof geometry.properties.radius === 'number') {
-            const workerLat = geometry.coordinates[1];
-            const workerLon = geometry.coordinates[0];
-            const radius = geometry.properties.radius;
-            const radiusKm = radius / 1000;
-
-            const distance = haversineDistance(
-              selectedAddress.latitude,
-              selectedAddress.longitude,
-              workerLat,
-              workerLon
-            );
-
-            return distance <= radiusKm;
-          }
-          return false;
-        });
-
-        if (!isCustomerInAnyServiceArea) {
-          return; // Customer is not in any of the worker's service areas
-        }
-      } else {
-        return;
-      }
-
-      if (worker.enabled === false) {
-        return;
-      }
-
-      if (worker.offDates && Array.isArray(worker.offDates) && worker.offDates.includes(dateString)) {
-        return;
-      }
-
-      let workerStartTime = '';
-      let workerEndTime = '';
-      let workerInterval = worker.interval || 60;
-
-      const workerSpecialHoursMap = worker.specialWorkingHours && Array.isArray(worker.specialWorkingHours) ?
-        worker.specialWorkingHours.reduce((acc, curr) => {
-          if (curr.date) acc[curr.date] = curr;
-          return acc;
-        }, {}) : {};
-
-      if (workerSpecialHoursMap[dateString]) {
-        const specialHours = workerSpecialHoursMap[dateString];
-        workerStartTime = specialHours.start;
-        workerEndTime = specialHours.end;
-        workerInterval = specialHours.interval || workerInterval;
-      } else if (worker.dailyWorkingHours && worker.dailyWorkingHours[currentDayName]) {
-        const dailyHours = worker.dailyWorkingHours[currentDayName];
-        if (dailyHours.enabled) {
-          workerStartTime = dailyHours.start;
-          workerEndTime = dailyHours.end;
-          workerInterval = dailyHours.interval || workerInterval;
-        } else {
-          return;
-        }
-      } else {
-        return;
-      }
-
-      if (workerStartTime && workerEndTime && workerInterval) {
-        const slots = generateTimeSlots(workerStartTime, workerEndTime, workerInterval);
-        slots.forEach(slot => {
-            const isBooked = existingBookings.some(booking =>
-                booking.workerId === worker.id && booking.selectedTime === slot
-            );
-
-            if (isBooked) {
-                return;
-            }
-
-          const existingWorkers = slotsMap.get(slot) || [];
-          if (!existingWorkers.includes(worker.id)) {
-            slotsMap.set(slot, [...existingWorkers, worker.id]);
-          }
-        });
-      }
-    });
-
-    const sortedSlots = Array.from(slotsMap.keys()).sort((a, b) => {
-      const parseTime = (timeStr) => {
-        const [time, ampm] = timeStr.split(' ');
-        let [hours, minutes] = time.split(':').map(Number);
-        if (ampm === 'PM' && hours !== 12) hours += 12;
-        if (ampm === 'AM' && hours === 12) hours = 0;
-        return hours * 60 + minutes;
-      };
-      const timeA = parseTime(a.split(' to ')[0]);
-      const timeB = parseTime(b.split(' to ')[0]);
-      return timeA - timeB;
-    });
-    
-    // Convert Map to an object for JSON serialization
-    const timeSlotsToWorkersMapObject = Object.fromEntries(slotsMap);
-
-    return {
-        availableTimeSlots: sortedSlots,
-        timeSlotsToWorkersMap: timeSlotsToWorkersMapObject
-    };
-
-  } catch (error) {
-    console.error("Error fetching available time slots:", error);
-    throw new functions.https.HttpsError('internal', 'Failed to get available time slots.', error.message);
-  }
-});
 exports.handleBookingNotification = firestore
   .document('bookings/{bookingId}')
   .onWrite(async (change, context) => {
@@ -555,7 +455,7 @@ exports.handleBookingNotification = firestore
 
       if (staffIds.length > 0) { // Ensure notification is saved to Firestore for all staff
         console.log('Condition met: staffIds.length > 0. Calling sendNotification for staff.');
-        await sendNotification(staffTokens, 'New Booking', `A new booking #${bookingId} has been created.`, { bookingId }, staffIds, 'staff');
+        await sendNotification(staffTokens, 'New Booking', `A new booking #${bookingId} has been created.`, { bookingId }, staffIds, 'staff', true);
       } else {
         console.log('Condition not met: staffIds.length is 0. Skipping staff notification.');
       }
@@ -723,7 +623,7 @@ exports.sendPushOnNewNotification = firestore
         return null;
       }
 
-      await sendNotification(allTokens, title, body, {}, allUserIds, 'all'); // 'all' as userType for logging
+      await sendNotification(allTokens, title, body, {}, allUserIds, 'all', false); // 'all' as userType for logging
       console.log(`Push notifications sent for new notification: ${title} to all users and workers.`);
       return null;
     }
@@ -754,7 +654,7 @@ exports.sendPushOnNewNotification = firestore
         return null;
       }
 
-      await sendNotification(tokens, title, body, {}, userIds, recipientType);
+      await sendNotification(tokens, title, body, {}, userIds, recipientType, false);
       console.log(`Push notifications sent for new notification: ${title} to ${recipientType}.`);
 
     } catch (error) {

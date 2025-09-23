@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { InputGroup, InputLeftElement } from "@chakra-ui/react";
-import { SearchIcon } from "@chakra-ui/icons";
+import { InputGroup, InputLeftElement, Tag, TagLabel, TagCloseButton } from "@chakra-ui/react";
+import { SearchIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
@@ -55,7 +55,7 @@ export default function AdsManager() {
   const [form, setForm] = useState({
     title: "",
     link: "",
-    audienceNationality: "",
+    audienceNationality: [], // Changed to array
     active: true,
     imageUrl: "",
     language: "en", // New language field
@@ -129,7 +129,7 @@ export default function AdsManager() {
       }
       fetchAds();
       onClose();
-      setForm({ title: "", link: "", audienceNationality: "", active: true, imageUrl: "" });
+      setForm({ title: "", link: "", audienceNationality: [], active: true, imageUrl: "", language: "en" });
       setAdImageFile(null);
       setAdImagePreview("");
       setUploadProgress(0);
@@ -146,12 +146,12 @@ export default function AdsManager() {
       ? {
           title: ad.title || "",
           link: ad.link || "",
-          audienceNationality: ad.audienceNationality || "",
+          audienceNationality: ad.audienceNationality || [],
           active: ad.active !== undefined ? ad.active : true,
           imageUrl: ad.imageUrl || "",
           language: ad.language || "en", // Populate language
         }
-      : { title: "", link: "", audienceNationality: "", active: true, imageUrl: "", language: "en" } // Default language for new ad
+      : { title: "", link: "", audienceNationality: [], active: true, imageUrl: "", language: "en" } // Default language for new ad
     );
     setAdImageFile(null);
     setAdImagePreview(ad && ad.imageUrl ? ad.imageUrl : "");
@@ -184,7 +184,7 @@ export default function AdsManager() {
     },
     { Header: "Title", accessor: "title" },
     { Header: "Link", accessor: "link", Cell: ({ value }) => value ? <a href={value} target="_blank" rel="noopener noreferrer">{value}</a> : "-" },
-    { Header: "Audience", accessor: "audienceNationality" },
+    { Header: "Audience", accessor: "audienceNationality", Cell: ({ value }) => (value && Array.isArray(value) ? value.join(", ") : "-") },
     { Header: "Language", accessor: "language" },
     { Header: "Impressions", accessor: "impression" },
     { Header: "Clicks", accessor: "clicks" },
@@ -244,6 +244,19 @@ export default function AdsManager() {
     useSortBy,
     usePagination
   );
+
+  const nationalities = ["UAE", "Saudi Arabia", "Kuwait", "Bahrain", "Oman", "Qatar", "Other"];
+
+  const handleNationalityChange = (nationality) => {
+    setForm(prevForm => {
+      const currentNationalities = prevForm.audienceNationality || [];
+      if (currentNationalities.includes(nationality)) {
+        return { ...prevForm, audienceNationality: currentNationalities.filter(n => n !== nationality) };
+      } else {
+        return { ...prevForm, audienceNationality: [...currentNationalities, nationality] };
+      }
+    });
+  };
 
   return (
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
@@ -396,15 +409,25 @@ export default function AdsManager() {
                
                   <FormControl mb={3}>
                     <FormLabel>Audience Nationality</FormLabel>
-                    <Select placeholder="Select nationality" value={form.audienceNationality} onChange={e => setForm(f => ({ ...f, audienceNationality: e.target.value }))}>
-                      <option value="UAE">UAE</option>
-                      <option value="Saudi Arabia">Saudi Arabia</option>
-                      <option value="Kuwait">Kuwait</option>
-                      <option value="Bahrain">Bahrain</option>
-                      <option value="Oman">Oman</option>
-                      <option value="Qatar">Qatar</option>
-                      <option value="Other">Other</option>
-                    </Select>
+                    <Menu closeOnSelect={false}>
+                      <MenuButton as={Button} rightIcon={<ChevronDownIcon />} width="100%" textAlign="left">
+                        {form.audienceNationality.length > 0
+                          ? form.audienceNationality.map(nat => <Tag size="sm" key={nat} mr={1}>{nat}</Tag>)
+                          : "Select nationalities"}
+                      </MenuButton>
+                      <MenuList>
+                        {nationalities.map(nationality => (
+                          <MenuItem key={nationality} onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              isChecked={form.audienceNationality.includes(nationality)}
+                              onChange={() => handleNationalityChange(nationality)}
+                            >
+                              {nationality}
+                            </Checkbox>
+                          </MenuItem>
+                        ))}
+                      </MenuList>
+                    </Menu>
                   </FormControl>
                   <FormControl mb={3}>
                     <FormLabel>Language</FormLabel>

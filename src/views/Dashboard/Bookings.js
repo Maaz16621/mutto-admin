@@ -3,15 +3,20 @@ import { Text, Box, Button, Flex, Heading, Input, Table, Thead, Tbody, Tr, Th, T
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { BsThreeDotsVertical } from "react-icons/bs";
-import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters } from "react-table";
-import { SearchIcon } from "@chakra-ui/icons";
+import { VscChevronDown, VscChevronRight } from "react-icons/vsc";
+import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters, useGroupBy, useExpanded } from "react-table";
+import { SearchIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import { collection, getDocs, getDoc, updateDoc, doc, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { firestore } from "../../firebase";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
 import CardBody from "components/Card/CardBody.js";
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';                                                          
-import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';    
+import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import InvoiceTemplate from 'components/Invoice/InvoiceTemplate';
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 const calculateDistance = (coords1, coords2) => {
@@ -172,7 +177,8 @@ export default function Bookings() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const toast = useToast();
-
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportData, setReportData] = useState([]);
   const [appSettings, setAppSettings] = useState(null);
   const [users, setUsers] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -196,6 +202,13 @@ export default function Bookings() {
   const [selectedSavedVehicleId, setSelectedSavedVehicleId] = useState('');
  
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCloseOriginal } = useDisclosure();
+  const { isOpen: isReportModalOpen, onOpen: onOpenReportModal, onClose: onCloseReportModal } = useDisclosure();
+
+  const [reportStartDate, setReportStartDate] = useState(null);
+  const [reportEndDate, setReportEndDate] = useState(null);
+  const [selectedReportServices, setSelectedReportServices] = useState([]);
+  const [selectedReportWorkers, setSelectedReportWorkers] = useState([]);
+  const [selectedReportStatuses, setSelectedReportStatuses] = useState([]);
   const onCreateClose = () => {
     onCloseOriginal();
     setNewBooking({
@@ -248,7 +261,7 @@ export default function Bookings() {
             const userDocRef = doc(firestore, "users", booking.userId);
             const userDoc = await getDoc(userDocRef);
             userDetails = userDoc.data() || {};
-            customerName = userDetails.username || customerName;
+            customerName = userDetails.fullName || customerName;
         }
 
         if (booking.serviceId) {
@@ -262,7 +275,7 @@ export default function Bookings() {
             const workerDocRef = doc(firestore, "workers", booking.workerId);
             const workerDoc = await getDoc(workerDocRef);
             workerDetails = workerDoc.data() || {};
-            workerName = workerDetails.userName || workerName;
+            workerName = workerDetails.fullName || workerName;
         }
 
         return {
@@ -347,14 +360,14 @@ export default function Bookings() {
     try {
       await addDoc(collection(firestore, "bookings"), {
         userId: newBooking.user?.id || null,
-        customerName: newBooking.user?.username || userSearchTerm, // Use userSearchTerm for new users
+        customerName: newBooking.user?.fullName || userSearchTerm, // Use userSearchTerm for new users
         phone: newBooking.phone,
         email: newBooking.email,
         selectedAddress: newBooking.selectedAddress,
         serviceId: newBooking.service?.id || null,
         serviceName: newBooking.service?.name || null,
         workerId: newBooking.selectedWorker?.id || null,
-        workerName: newBooking.selectedWorker?.userName || null,
+        workerName: newBooking.selectedWorker?.fullName || null,
         vehicle: newBooking.vehicle, // Changed from vehicle to selectedVehicle
         addons: newBooking.addons,
         paymentMethod: newBooking.paymentMethod,
@@ -380,9 +393,29 @@ export default function Bookings() {
   const columns = useMemo(() => [
     { Header: "Customer", accessor: "customerName" },
     { Header: "Service", accessor: "serviceName" },
-    { Header: "Booking Date", accessor: d => `${d.selectedDate} ${d.selectedTime}`, id: 'bookingDate' },
+    {
+      Header: "Booking Date",
+      accessor: 'selectedDate',
+      id: 'bookingDate',
+      Cell: ({ row, cell }) => {
+        return row.original ? `${row.original.selectedDate} ${row.original.selectedTime}` : '';
+      },
+      aggregate: 'count',
+      Aggregated: ({ value }) => `${value} bookings`,
+    },
     { Header: "Assigned Staff", accessor: "workerName" },
-    { Header: "Status", accessor: "status", Cell: ({value}) => <Tag colorScheme={value === 'Cgemompleted' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag> },
+    { Header: "Status", accessor: "status",       Cell: ({value}) => <Tag colorScheme={value === 'Completed' ? 'green' : value === 'pending' ? 'orange' : value === 'confirmed' ? 'blue' : 'red'}>{value}</Tag>,
+      Aggregated: ({ cell }) => {
+        if (!cell.subRows) {
+          return null; // Handle cases where subRows might not be available
+        }
+        const uniqueStatuses = [...new Set(cell.subRows.map(row => row.original.status))];
+        if (uniqueStatuses.length === 1) {
+          return <Tag colorScheme={uniqueStatuses[0] === 'Completed' ? 'green' : uniqueStatuses[0] === 'pending' ? 'orange' : uniqueStatuses[0] === 'confirmed' ? 'blue' : 'red'}>{uniqueStatuses[0]}</Tag>;
+        }
+        return <Tag>Mixed ({uniqueStatuses.length})</Tag>;
+      },
+    },
     {
       Header: "Actions",
       id: "actions",
@@ -394,6 +427,7 @@ export default function Bookings() {
           </MenuList>
         </Menu>
       ),
+      Aggregated: () => null,
     },
   ], [openView]);
 
@@ -418,7 +452,7 @@ export default function Bookings() {
     prepareRow,
     page,
     setGlobalFilter: setTableGlobalFilter,
-    state,
+    state: { groupBy, expanded, pageIndex, pageSize },
     canPreviousPage,
     canNextPage,
     pageOptions,
@@ -427,14 +461,19 @@ export default function Bookings() {
     nextPage,
     previousPage,
     setPageSize,
+    toggleAllRowsExpanded,
   } = useTable(
-    { columns, data: filteredData, initialState: { pageSize: 10 }, autoResetPage: false },
-    useGlobalFilter, useFilters, useSortBy, usePagination
+    { columns, data: filteredData, initialState: { pageSize: 10, groupBy: ['bookingDate'], autoResetExpanded: false, expanded: true }, autoResetPage: false },
+    useGlobalFilter, useFilters, useGroupBy, useSortBy, useExpanded, usePagination
   );
 
   useEffect(() => {
     setTableGlobalFilter(globalFilter);
-  }, [globalFilter, setTableGlobalFilter]);
+    // Set all rows to expanded after data is loaded
+    if (bookings.length > 0) {
+      toggleAllRowsExpanded(true);
+    }
+  }, [globalFilter, setTableGlobalFilter, bookings, toggleAllRowsExpanded]);
 
   const eligibleWorkersForServiceAndLocation = useMemo(() => {
     if (!newBooking.service || !newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) return [];
@@ -548,7 +587,7 @@ export default function Bookings() {
   const filteredUsers = useMemo(() => {
     if (!userSearchTerm) return [];
     return users.filter(user =>
-      user.username.toLowerCase().includes(userSearchTerm.toLowerCase())
+      user.fullName && user.fullName.toLowerCase().includes(userSearchTerm.toLowerCase())
     );
   }, [userSearchTerm, users]);
 
@@ -563,7 +602,7 @@ export default function Bookings() {
       selectedAddress: {},
       vehicle: defaultVehicleObj || {},
     }));
-    setUserSearchTerm(user.username);
+    setUserSearchTerm(user.fullName || '');
     setShowUserSuggestions(false);
     setSelectedSavedAddressId('');
     setSelectedSavedVehicleId(user.defaultVehicle || ''); // Set default vehicle ID
@@ -602,8 +641,178 @@ export default function Bookings() {
     }));
   };
 
+  const fetchReportData = async () => {
+    setReportLoading(true);
+    try {
+      let bookingsRef = collection(firestore, "bookings");
+      let q = query(bookingsRef);
+
+      // Apply date range filter (only filter applied in Firestore query)
+      if (reportStartDate && reportEndDate) {
+        const startDate = new Date(reportStartDate);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(reportEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        q = query(q, where("selectedDate", ">=", startDate.toISOString().split('T')[0]), where("selectedDate", "<=", endDate.toISOString().split('T')[0]));
+      } else {
+        // If no date range, fetch all bookings (potentially large)
+        // Consider adding a warning or a default date range if this is too broad
+      }
+
+      const querySnapshot = await getDocs(q);
+      let reportBookings = await Promise.all(querySnapshot.docs.map(async (bookingDoc) => {
+        const booking = { id: bookingDoc.id, ...bookingDoc.data() };
+
+        // Fetch related data for detailed report
+        if (booking.userId) {
+          const userDoc = await getDoc(doc(firestore, "users", booking.userId));
+          booking.userDetails = userDoc.data() || {};
+        }
+        if (booking.serviceId) {
+          const serviceDoc = await getDoc(doc(firestore, "services", booking.serviceId));
+          booking.serviceDetails = serviceDoc.data() || {};
+        }
+        if (booking.workerId) {
+          const workerDoc = await getDoc(doc(firestore, "workers", booking.workerId));
+          booking.workerDetails = workerDoc.data() || {};
+        }
+        // Fetch addon details if any
+        if (booking.addons && booking.addons.length > 0) {
+          const addonDetailsPromises = booking.addons.map(addonId => getDoc(doc(firestore, "products", addonId)));
+          const addonDocs = await Promise.all(addonDetailsPromises);
+          booking.addonDetails = addonDocs.map(doc => doc.data());
+        }
+
+        return booking;
+      }));
+
+      // Perform all other filtering client-side
+      if (selectedReportServices.length > 0) {
+        reportBookings = reportBookings.filter(booking => selectedReportServices.includes(booking.serviceId));
+      }
+      if (selectedReportWorkers.length > 0) {
+        reportBookings = reportBookings.filter(booking => selectedReportWorkers.includes(booking.workerId));
+      }
+      if (selectedReportStatuses.length > 0) {
+        reportBookings = reportBookings.filter(booking => selectedReportStatuses.includes(booking.status));
+      }
+
+      console.log("Generated Report Data:", reportBookings);
+      // Store reportBookings in a state variable to be used for download
+      setReportData(reportBookings);
+
+    } catch (err) {
+      console.error("Error generating report:", err);
+      toast({ title: "Error generating report", status: "error", description: err.message });
+    }
+    setReportLoading(false);
+  };
+
+  const exportToCsv = (dataToExport, filename = 'report.csv') => {
+    const headers = [
+      "Booking ID",
+      "Customer Name",
+      "Customer Email",
+      "Customer Phone",
+      "Payment Method",
+      "Booking Date",
+      "Booking Time",
+      "Service Name",
+      "Service Cost",
+      "Service Duration",
+      "Service Description",
+      "Service Important Notes",
+      "Service What's Included",
+      "Status",
+      "Total Amount",
+      "Worker Name",
+      "Worker Email",
+      "Worker Phone",
+      "Address Name",
+      "Address Street",
+      "Address Latitude",
+      "Address Longitude",
+      "Address Type",
+      "Vehicle Company",
+      "Vehicle Model",
+      "Vehicle Year",
+      "Vehicle Color",
+      "Vehicle Plate Part 1",
+      "Vehicle Plate Part 2",
+      "Addons"
+    ];
+
+    const csvRows = dataToExport.map(booking => {
+      const row = [
+        booking.id || '',
+        booking.customerName || booking.userDetails?.fullName || '',
+        booking.email || booking.userDetails?.email || '',
+        `'${booking.phone || booking.userDetails?.phone || ''}'`,
+        booking.paymentMethod || '',
+        booking.selectedDate || '',
+        booking.selectedTime || '',
+        booking.serviceName || booking.serviceDetails?.name || '',
+        booking.serviceDetails?.cost || '',
+        booking.serviceDetails?.duration || '',
+        booking.serviceDetails?.description || '',
+        (booking.serviceDetails?.importantNotes || []).join('; '),
+        (booking.serviceDetails?.whatsIncluded || []).join('; '),
+        booking.status || '',
+        booking.totalAmount || '',
+        booking.workerName || booking.workerDetails?.fullName || '',
+        booking.workerDetails?.email || '',
+        booking.workerDetails?.phone || '',
+        booking.selectedAddress?.name || '',
+        booking.selectedAddress?.address || '',
+        booking.selectedAddress?.latitude || '',
+        booking.selectedAddress?.longitude || '',
+        booking.selectedAddress?.type || '',
+        booking.vehicle?.company || '',
+        booking.vehicle?.model || '',
+        booking.vehicle?.modelYear || '',
+        booking.vehicle?.color || '',
+        booking.vehicle?.plateNumberPart1 || '',
+        booking.vehicle?.plateNumberPart2 || '',
+        (booking.addonDetails || []).map(addon => `${addon.name} (${addon.price})`).join('; '),
+      ];
+      return row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csv = [headers.map(header => `"${header}"`).join(','), ...csvRows].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleGenerateInvoice = () => {
+    const invoiceElement = document.getElementById('invoice-template');
+    if (invoiceElement) {
+      html2canvas(invoiceElement)
+        .then((canvas) => {
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF();
+          const imgProps= pdf.getImageProperties(imgData);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`invoice-${viewBooking.id}.pdf`);
+        });
+    }
+  };
+
+
   return (
     <Flex direction="column" pt={{ base: "120px", md: "75px" }}>
+      <div id="invoice-container" style={{ position: 'absolute', left: '-9999px' }} >
+        {viewBooking && <InvoiceTemplate booking={viewBooking} />}
+      </div>
       <style>
         {`
           .react-datepicker-wrapper {
@@ -615,7 +824,10 @@ export default function Bookings() {
         <CardHeader p="6px 0px 22px 0px">
           <Flex justify="space-between" align="center">
             <Heading size="md">Bookings</Heading>
-            <Button colorScheme="blue" onClick={onCreateOpen}>Create Booking</Button>
+            <Flex>
+                <Button colorScheme="purple" onClick={onOpenReportModal} mr={4}>Generate Report</Button>
+                <Button colorScheme="blue" onClick={onCreateOpen}>Create Booking</Button>
+            </Flex>
           </Flex>
         </CardHeader>
         <CardBody>
@@ -649,11 +861,27 @@ export default function Bookings() {
                 ))}
               </Thead>
               <Tbody {...getTableBodyProps()}>
-                {page.map(row => {
+                {page.map((row, i) => {
                   prepareRow(row);
                   return (
                     <Tr {...row.getRowProps()}>
-                      {row.cells.map(cell => <Td {...cell.getCellProps()}>{cell.render("Cell")}</Td>)}
+                      {row.cells.map(cell => {
+                        return (
+                          <Td {...cell.getCellProps()}>
+                            {cell.isGrouped ? (
+                              <Flex align="center" {...row.getToggleRowExpandedProps()} style={{ cursor: 'pointer', width: '100%' }}>
+                                <Icon as={row.isExpanded ? VscChevronDown : VscChevronRight} mr={2} />
+                                <Text fontWeight="bold">{cell.value}</Text>
+                                <Tag colorScheme="red" ml={2}>{row.subRows.length}</Tag>
+                              </Flex>
+                            ) : cell.isAggregated ? (
+                              cell.render('Aggregated')
+                            ) : cell.isPlaceholder && cell.column.id !== 'bookingDate' ? null : (
+                              cell.render('Cell')
+                            )}
+                          </Td>
+                        );
+                      })}
                     </Tr>
                   );
                 })}
@@ -664,10 +892,10 @@ export default function Bookings() {
             <Flex mt={4} align="center" justify="flex-end" gap={2}>
               <Button size="sm" onClick={() => gotoPage(0)} disabled={!canPreviousPage}>&lt;&lt;</Button>
               <Button size="sm" onClick={() => previousPage()} disabled={!canPreviousPage}>&lt;</Button>
-              <Box>Page {state.pageIndex + 1} of {pageOptions.length}</Box>
+              <Box>Page {pageIndex + 1} of {pageOptions.length}</Box>
               <Button size="sm" onClick={() => nextPage()} disabled={!canNextPage}>&gt;</Button>
               <Button size="sm" onClick={() => gotoPage(pageCount - 1)} disabled={!canNextPage}>&gt;&gt;</Button>
-              <Select size="sm" value={state.pageSize} onChange={e => setPageSize(Number(e.target.value))} w="auto" ml={2}>
+              <Select size="sm" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} w="auto" ml={2}>
                 {[10, 20, 30, 40, 50].map(pageSize => <option key={pageSize} value={pageSize}>Show {pageSize}</option>)}
               </Select>
             </Flex>
@@ -684,7 +912,7 @@ export default function Bookings() {
             <ModalBody>
               <Box>
                 <Heading size="md">User Details</Heading>
-                <Text>Name: {viewBooking.userDetails?.username || viewBooking.customerName}</Text>
+                <Text>Name: {viewBooking.userDetails?.fullName || viewBooking.customerName}</Text>
                 <Text>Email: {viewBooking.userDetails?.email || viewBooking.email}</Text>
 
                 <Heading size="md" mt={4}>Vehicle Details</Heading>
@@ -703,7 +931,7 @@ export default function Bookings() {
                 <Text>Price: {viewBooking.serviceDetails?.cost}</Text>
 
                 <Heading size="md" mt={4}>Worker Details</Heading>
-                <Text>Name: {viewBooking.workerDetails?.userName}</Text>
+                <Text>Name: {viewBooking.workerDetails?.fullName}</Text>
                 <Text>Email: {viewBooking.workerDetails?.email}</Text>
 
                 <Heading size="md" mt={4}>Booking Information</Heading>
@@ -722,9 +950,15 @@ export default function Bookings() {
             </ModalBody>
             <ModalFooter>
               {viewBooking.status !== 'cancelled' && (
-                <Button colorScheme="red" mr={3} onClick={() => handleCancel(viewBooking.id)} isLoading={loading}>
+                <>               
+                 <Button colorScheme="red" mr={3} onClick={() => handleCancel(viewBooking.id)} isLoading={loading}>
                   Cancel Booking
                 </Button>
+                <Button colorScheme="blue" mr={3} onClick={handleGenerateInvoice}>
+                  Generate Invoice
+                </Button>
+                </>
+
               )}
               <Button variant="ghost" onClick={onViewClose}>Close</Button>
             </ModalFooter>
@@ -744,7 +978,7 @@ export default function Bookings() {
                   <FormControl>
                     <FormLabel>User</FormLabel>
                     <Input
-                      placeholder="Search or enter user name"
+                      placeholder="Search or enter full name"
                       value={userSearchTerm}
                       onChange={(e) => {
                         setUserSearchTerm(e.target.value);
@@ -765,7 +999,7 @@ export default function Bookings() {
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleUserSelect(user)}
                             >
-                              {user.username}
+                              {user.fullName || user.email}
                             </ListItem>
                           ))}
                         </List>
@@ -1026,6 +1260,151 @@ export default function Bookings() {
                 </>
               )}
               <Button variant="ghost" onClick={onCreateClose}>Cancel</Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {isReportModalOpen && (
+        <Modal isOpen={isReportModalOpen} onClose={onCloseReportModal} isCentered scrollBehavior="inside" size="xl">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Generate Detailed Report</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <FormControl mb={4}>
+                <FormLabel>Date Range</FormLabel>
+                <Flex>
+                  <DatePicker
+                    selected={reportStartDate}
+                    onChange={(date) => setReportStartDate(date)}
+                    selectsStart
+                    startDate={reportStartDate}
+                    endDate={reportEndDate}
+                    dateFormat="yyyy-MM-dd"
+                    placeholderText="Start Date"
+                    customInput={<CustomDatePickerInput />}
+                  />
+                  <Box mx={2}>to</Box>
+                  <DatePicker
+                    selected={reportEndDate}
+                    onChange={(date) => setReportEndDate(date)}
+                    selectsEnd
+                    startDate={reportStartDate}
+                    endDate={reportEndDate}
+                    minDate={reportStartDate}
+                    dateFormat="yyyy-MM-dd"
+                    placeholderText="End Date"
+                    customInput={<CustomDatePickerInput />}
+                  />
+                </Flex>
+              </FormControl>
+
+              <FormControl mb={4}>
+                <FormLabel>Services</FormLabel>
+                <Menu closeOnSelect={false}>
+                  <MenuButton as={Button} rightIcon={<ChevronDownIcon />} width="100%">
+                    {selectedReportServices.length === 0
+                      ? "Select Services"
+                      : selectedReportServices.length === services.length
+                      ? "All Services Selected"
+                      : `${selectedReportServices.length} Service(s) Selected`}
+                  </MenuButton>
+                  <MenuList>
+                    <MenuItem>
+                      <Checkbox
+                        isChecked={selectedReportServices.length === services.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedReportServices(services.map(s => s.id));
+                          } else {
+                            setSelectedReportServices([]);
+                          }
+                        }}
+                      >
+                        Select All
+                      </Checkbox>
+                    </MenuItem>
+                    <CheckboxGroup value={selectedReportServices} onChange={setSelectedReportServices}>
+                      {services.map(service => (
+                        <MenuItem key={service.id}>
+                          <Checkbox value={service.id}>{service.name}</Checkbox>
+                        </MenuItem>
+                      ))}
+                    </CheckboxGroup>
+                  </MenuList>
+                </Menu>
+              </FormControl>
+
+              <FormControl mb={4}>
+                <FormLabel>Workers</FormLabel>
+                <Menu closeOnSelect={false}>
+                  <MenuButton as={Button} rightIcon={<ChevronDownIcon />} width="100%">
+                    {selectedReportWorkers.length === 0
+                      ? "Select Workers"
+                      : selectedReportWorkers.length === workers.length
+                      ? "All Workers Selected"
+                      : `${selectedReportWorkers.length} Worker(s) Selected`}
+                  </MenuButton>
+                  <MenuList>
+                    <MenuItem>
+                      <Checkbox
+                        isChecked={selectedReportWorkers.length === workers.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedReportWorkers(workers.map(w => w.id));
+                          } else {
+                            setSelectedReportWorkers([]);
+                          }
+                        }}
+                      >
+                        Select All
+                      </Checkbox>
+                    </MenuItem>
+                    <CheckboxGroup value={selectedReportWorkers} onChange={setSelectedReportWorkers}>
+                      {workers.map(worker => (
+                        <MenuItem key={worker.id}>
+                          <Checkbox value={worker.id}>{worker.userName}</Checkbox>
+                        </MenuItem>
+                      ))}
+                    </CheckboxGroup>
+                  </MenuList>
+                </Menu>
+              </FormControl>
+
+              <FormControl mb={4}>
+                <FormLabel>Status</FormLabel>
+                <CheckboxGroup value={selectedReportStatuses} onChange={setSelectedReportStatuses}>
+                  <Stack direction="row">
+                    <Checkbox value="pending">Pending</Checkbox>
+                    <Checkbox value="confirmed">Confirmed</Checkbox>
+                    <Checkbox value="Completed">Completed</Checkbox>
+                    <Checkbox value="cancelled">Cancelled</Checkbox>
+                  </Stack>
+                </CheckboxGroup>
+              </FormControl>
+            </ModalBody>
+
+            <ModalFooter>
+              {reportData.length > 0 && (
+                <Button colorScheme="green" mr={3} onClick={() => {
+                  const now = new Date();
+                  const timestamp = now.getFullYear() +
+                                    String(now.getMonth() + 1).padStart(2, '0') +
+                                    String(now.getDate()).padStart(2, '0') + '_' +
+                                    String(now.getHours()).padStart(2, '0') +
+                                    String(now.getMinutes()).padStart(2, '0') +
+                                    String(now.getSeconds()).padStart(2, '0');
+                  const finalFilename = `detailed_report_${timestamp}.csv`;
+                  exportToCsv(reportData, finalFilename);
+                }}>
+                  Download CSV
+                </Button>
+              )}
+              <Button colorScheme="blue" mr={3} onClick={fetchReportData} isLoading={reportLoading} loadingText="Generating...">
+                Generate Report
+              </Button>
+              <Button variant="ghost" onClick={onCloseReportModal}>Cancel</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>
