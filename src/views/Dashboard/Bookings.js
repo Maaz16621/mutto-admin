@@ -6,7 +6,7 @@ import { BsThreeDotsVertical } from "react-icons/bs";
 import { VscChevronDown, VscChevronRight } from "react-icons/vsc";
 import { useTable, useGlobalFilter, useSortBy, usePagination, useFilters, useGroupBy, useExpanded } from "react-table";
 import { SearchIcon, ChevronDownIcon } from "@chakra-ui/icons";
-import { collection, getDocs, getDoc, updateDoc, doc, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, getDocs, getDoc, updateDoc, doc, addDoc, serverTimestamp, query, where, orderBy } from "firebase/firestore";
 import { firestore } from "../../firebase";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
@@ -246,7 +246,8 @@ export default function Bookings() {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(firestore, "bookings"));
+            const q = query(collection(firestore, "bookings"), orderBy("selectedDate", "desc"));
+      const querySnapshot = await getDocs(q);
       const bookingsList = await Promise.all(querySnapshot.docs.map(async (bookingDoc) => {
         const booking = { id: bookingDoc.id, ...bookingDoc.data() };
 
