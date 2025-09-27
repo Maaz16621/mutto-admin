@@ -6,6 +6,7 @@ const deleteUserRoute = require('./deleteUser');
 const placeDetailsRoute = require('./placeDetails');
 const nominatimProxyRoute = require('./nominatimProxy');
 const googleToOsmRoute = require('./googleToOsm');
+const getServicesRoute = require('./getServices');
 
 
 const app = express();
@@ -17,6 +18,7 @@ app.use('/api', deleteUserRoute);
 app.use('/api', placeDetailsRoute);
 app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
+app.use('/api', getServicesRoute);
 
 
 
