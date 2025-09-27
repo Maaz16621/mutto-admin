@@ -1,5 +1,7 @@
-Error generating report
-Too many disjunctions after normalization, the maximum is 30
-
-Error generating report
-Too many disjunctions after normalization. Result had 42 disjunctions which is more than the maximum of 30
+const getAvailableTimeSlots = httpsCallable(functions, 'getAvailableTimeSlotsV2');
+      const result = await getAvailableTimeSlots({
+        serviceId,
+        dateString,
+        selectedAddress,
+        addonIds, // Pass addonIds to the Cloud Function
+      });

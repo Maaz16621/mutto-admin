@@ -1,5 +1,5 @@
 
-const { pubsub } = require('firebase-functions/v1');
+const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -9,7 +9,7 @@ const { sendNotification } = require('../utils/helpers');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-exports.scheduleBookingReminder = pubsub.schedule('every 60 minutes').onRun(async (context) => {
+exports.scheduleBookingReminder = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
   console.log('Running scheduleBookingReminder...');
 
   const nowUAE = dayjs().tz('Asia/Dubai');

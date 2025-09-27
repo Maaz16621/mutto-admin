@@ -16,6 +16,7 @@ import {
   SimpleGrid,
   Text,
   Checkbox,
+  Switch,
 } from "@chakra-ui/react";
 import Card from "components/Card/Card.js";
 import CardHeader from "components/Card/CardHeader.js";
@@ -35,6 +36,10 @@ export default function Settings() {
   const [removingOffDateId, setRemovingOffDateId] = useState(null);
   const [removingSpecialHoursId, setRemovingSpecialHoursId] = useState(null);
   const [currency, setCurrency] = useState("USD");
+  const [paymentMethods, setPaymentMethods] = useState({
+    cash: { active: true },
+    stripeOnline: { active: true },
+  });
   const [offDates, setOffDates] = useState([]);
   const [newOffDate, setNewOffDate] = useState("");
   const [newOffDateRangeStart, setNewOffDateRangeStart] = useState("");
@@ -73,6 +78,7 @@ export default function Settings() {
             sunday: { start: "00:00", end: "00:00", enabled: false },
           });
           setSpecialWorkingHours(data.specialWorkingHours || []);
+          setPaymentMethods(data.paymentMethods || { cash: { active: true }, stripeOnline: { active: true } });
         }
       } catch (error) {
         toast({ title: "Error fetching settings", description: error.message, status: "error" });
@@ -86,7 +92,7 @@ export default function Settings() {
     setSavingSettings(true);
     try {
       const settingsDocRef = doc(firestore, "settings", "appSettings");
-      await setDoc(settingsDocRef, { currency, offDates, dailyWorkingHours, specialWorkingHours }, { merge: true });
+      await setDoc(settingsDocRef, { currency, offDates, dailyWorkingHours, specialWorkingHours, paymentMethods }, { merge: true });
       toast({ title: "Settings saved successfully", status: "success" });
     } catch (error) {
       toast({ title: "Error saving settings", description: error.message, status: "error" });
@@ -356,6 +362,41 @@ export default function Settings() {
                   ))}
                 </Flex>
               </Box>
+            </Box>
+            <Box mt={8}>
+              <Heading size="md" mb={4}>Payment Methods</Heading>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <FormControl display="flex" alignItems="center">
+                  <FormLabel htmlFor="cash-payment" mb="0">
+                    Cash Payment
+                  </FormLabel>
+                  <Switch
+                    id="cash-payment"
+                    isChecked={paymentMethods.cash?.active}
+                    onChange={(e) =>
+                      setPaymentMethods({
+                        ...paymentMethods,
+                        cash: { ...paymentMethods.cash, active: e.target.checked },
+                      })
+                    }
+                  />
+                </FormControl>
+                <FormControl display="flex" alignItems="center">
+                  <FormLabel htmlFor="online-payment" mb="0">
+                    Stripe Online Payment
+                  </FormLabel>
+                  <Switch
+                    id="online-payment"
+                    isChecked={paymentMethods.stripeOnline?.active}
+                    onChange={(e) =>
+                      setPaymentMethods({
+                        ...paymentMethods,
+                        stripeOnline: { ...paymentMethods.stripeOnline, active: e.target.checked },
+                      })
+                    }
+                  />
+                </FormControl>
+              </SimpleGrid>
             </Box>
             </>
           )}

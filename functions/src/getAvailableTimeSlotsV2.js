@@ -5,15 +5,9 @@ const dayjs = require('dayjs');
 const { haversineDistance, isPointInPolygon, generateTimeSlots } = require('../utils/helpers');
 
 exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      'unauthenticated',
-      'The function must be called while authenticated.'
-    );
-  }
 
-  const { serviceId, dateString, selectedAddress, bufferTime = 0 } = data;
 
+      const { serviceId, dateString, selectedAddress, bufferTime = 0, addons = [] } = data;
   if (!serviceId || !dateString || !selectedAddress) {
     throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
   }
@@ -42,6 +36,31 @@ exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) =
     const appSettings = settingsSnap.data();
     const serviceData = { id: serviceSnap.id, ...serviceSnap.data() };
     const workers = workerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Calculate total service duration including addons
+    let totalServiceDuration = serviceData.duration || 60; // Default to 60 minutes
+    console.log(`Initial totalServiceDuration (from service): ${totalServiceDuration}`);
+
+    if (addons && addons.length > 0) {
+      console.log(`Addons received: ${JSON.stringify(addons)}`);
+      // Fetch addon details to get their times
+      const addonPromises = addons.map(addonId => {
+        console.log(`Fetching addon with ID: ${addonId}`);
+        return admin.firestore().collection('products').doc(addonId).get(); // Changed 'addons' to 'products'
+      });
+      const addonSnaps = await Promise.all(addonPromises);
+      const addonTimes = addonSnaps.map(snap => {
+        const data = snap.data();
+        console.log(`Addon ${snap.id} data: ${JSON.stringify(data)}`);
+        return data?.time || 0;
+      });
+      const sumAddonTimes = addonTimes.reduce((sum, time) => sum + time, 0);
+      console.log(`Sum of addon times: ${sumAddonTimes}`);
+      totalServiceDuration += sumAddonTimes;
+      console.log(`Final totalServiceDuration (with addons): ${totalServiceDuration}`);
+    }
+
+
     
     console.log(`Found ${workers.length} workers.`);
 
@@ -148,7 +167,10 @@ exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) =
 
       let workerStartTime = '';
       let workerEndTime = '';
-      let workerInterval = worker.interval || 60;
+      let workerInterval = serviceData.duration || 60; // Use service duration as base
+
+      console.log(`Worker ${worker.id} - serviceData.interval: ${serviceData.interval}`);
+      console.log(`Worker ${worker.id} - initial workerInterval (from service): ${workerInterval}`);
 
       const workerSpecialHoursMap = worker.specialWorkingHours && Array.isArray(worker.specialWorkingHours) ?
         worker.specialWorkingHours.reduce((acc, curr) => {
@@ -176,26 +198,69 @@ exports.getAvailableTimeSlotsV2 = functions.https.onCall(async (data, context) =
         return;
       }
 
+      console.log(`Worker ${worker.id} - final workerInterval for generateTimeSlots: ${workerInterval}`);
+
       if (workerStartTime && workerEndTime && workerInterval) {
-        const slots = generateTimeSlots(workerStartTime, workerEndTime, workerInterval, bufferTime);
-        slots.forEach(slot => {
-            const [slotStartStr, slotEndStr] = slot.split(' to ');
+        let effectiveStartTime = workerStartTime;
+
+        // Check if the selected date is today
+        const today = dayjs().format('YYYY-MM-DD');
+        if (dateString === today) {
+          const now = dayjs(); // Current time
+          const workerStartToday = dayjs(`${dateString} ${workerStartTime}`, 'YYYY-MM-DD HH:mm'); // Worker's scheduled start time for today
+
+          // If the worker's scheduled start time for today is in the past
+          if (workerStartToday.isBefore(now)) {
+            // Calculate the next valid slot start time from now, respecting the interval
+            let nextValidSlotTime = now.add(workerInterval - (now.minute() % workerInterval), 'minute');
+            // Ensure it's not past the worker's end time
+            const workerEndToday = dayjs(`${dateString} ${workerEndTime}`, 'YYYY-MM-DD HH:mm');
+            if (nextValidSlotTime.isAfter(workerEndToday)) {
+                // No more slots today for this worker
+                return;
+            }
+            effectiveStartTime = nextValidSlotTime.format('HH:mm');
+          }
+        }
+
+        const slots = generateTimeSlots(effectiveStartTime, workerEndTime, totalServiceDuration);
+          slots.forEach(slot => {
+            const serviceBufferTime = serviceData.bufferTime || 0; // Get bufferTime from service
+
+            const slotStartStr = slot.split(' to ')[0];
+            const slotEndStr = slot.split(' to ')[1];
+
+            // Convert slot times to dayjs objects for easier comparison
             const slotStart = dayjs(`${dateString} ${slotStartStr}`, 'YYYY-MM-DD hh:mm A');
             const slotEnd = dayjs(`${dateString} ${slotEndStr}`, 'YYYY-MM-DD hh:mm A');
 
             const isBooked = existingBookings.some(booking => {
                 if (booking.workerId !== worker.id) return false;
 
-                const [bookingStartStr, bookingEndStr] = booking.selectedTime.split(' to ');
+                const bookingStartStr = booking.selectedTime.split(' to ')[0];
+                const bookingEndStr = booking.selectedTime.split(' to ')[1];
+
                 const bookingStart = dayjs(`${dateString} ${bookingStartStr}`, 'YYYY-MM-DD hh:mm A');
                 const bookingEnd = dayjs(`${dateString} ${bookingEndStr}`, 'YYYY-MM-DD hh:mm A');
 
-                // Check for overlap considering bufferTime
-                // A slot is booked if its start time is before the booking's end time + buffer
-                // AND its end time + buffer is after the booking's start time
+                // Calculate the worker's actual busy period for the existing booking
+                // This is from (booking start - driving time) to (booking end + service buffer time)
+                const existingBookingBusyStart = bookingStart.subtract(worker.drivingTime || 0, 'minute');
+                // Assuming existing bookings also have a serviceBufferTime associated with them.
+                // If not, this needs to be fetched from the service of the existing booking.
+                // For simplicity, I'll use the current service's bufferTime for existing bookings too.
+                const existingBookingServiceBufferTime = serviceData.bufferTime || 0; // Assuming same buffer for existing bookings
+                const existingBookingBusyEnd = bookingEnd.add(existingBookingServiceBufferTime, 'minute');
+
+                // Calculate the worker's actual busy period for the potential new slot
+                const newSlotBusyStart = slotStart.subtract(worker.drivingTime || 0, 'minute');
+                const newSlotBusyEnd = slotEnd.add(serviceBufferTime, 'minute');
+
+                // Check for overlap between the two busy periods
+                // Overlap occurs if (start1 < end2) AND (end1 > start2)
                 return (
-                    slotStart.isBefore(bookingEnd.add(booking.bufferTime || 0, 'minute')) &&
-                    slotEnd.add(bufferTime, 'minute').isAfter(bookingStart)
+                    newSlotBusyStart.isBefore(existingBookingBusyEnd) &&
+                    newSlotBusyEnd.isAfter(existingBookingBusyStart)
                 );
             });
 

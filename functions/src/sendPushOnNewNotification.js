@@ -1,9 +1,9 @@
 
-const { firestore } = require('firebase-functions/v1');
+const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 const { sendNotification } = require('../utils/helpers');
 
-exports.sendPushOnNewNotification = firestore
+exports.sendPushOnNewNotification = functions.firestore
   .document('notifications/{notificationId}')
   .onCreate(async (snapshot, context) => {
     const notificationData = snapshot.data();

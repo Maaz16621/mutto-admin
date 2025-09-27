@@ -45,7 +45,7 @@ export default function WorkerManagement() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedWorker, setSelectedWorker] = useState(null);
-  const [form, setForm] = useState({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active" });
+  const [form, setForm] = useState({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active", drivingTime: 0 });
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -211,6 +211,7 @@ const fetchNominatimBoundary = async (query) => {
           status: form.status,
           dailyWorkingHours: form.dailyWorkingHours,
           offDates: form.offDates,
+          drivingTime: form.drivingTime,
           lastLogin: null,
           createdAt: serverTimestamp(),
         });
@@ -219,7 +220,7 @@ const fetchNominatimBoundary = async (query) => {
       fetchWorkers();
       onClose();
       const defaultHours = companySettings?.dailyWorkingHours || {};
-      setForm({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active", dailyWorkingHours: defaultHours, offDates: [] });
+      setForm({ userName: "", email: "", password: "", phoneNumber: "", assignedServices: [], autoAccept: false, status: "active", dailyWorkingHours: defaultHours, offDates: [], drivingTime: 0 });
       setSelectedWorker(null);
     } catch (err) {
       toast({ title: "Error saving worker", status: "error", description: err.message, position: "top-right" });
@@ -244,6 +245,7 @@ const fetchNominatimBoundary = async (query) => {
           status: worker.status || "active",
           dailyWorkingHours: worker.dailyWorkingHours || defaultHours,
           offDates: worker.offDates || [],
+          drivingTime: worker.drivingTime || 0,
         }
       : { 
           userName: "", 
@@ -254,7 +256,8 @@ const fetchNominatimBoundary = async (query) => {
           autoAccept: false, 
           status: "active", 
           dailyWorkingHours: defaultHours, 
-          offDates: [] 
+          offDates: [],
+          drivingTime: 0,
         }
     );
     onOpen();
@@ -501,6 +504,7 @@ const fetchNominatimBoundary = async (query) => {
                 <FormControl isRequired><FormLabel>Email</FormLabel><Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} isDisabled={!!selectedWorker} /></FormControl>
                 {!selectedWorker && <FormControl isRequired><FormLabel>Password</FormLabel><Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></FormControl>}
                 <FormControl isRequired><FormLabel>Phone Number</FormLabel><Input value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))} /></FormControl>
+                <FormControl><FormLabel>Driving Time (minutes)</FormLabel><Input type="number" value={form.drivingTime} onChange={e => setForm(f => ({ ...f, drivingTime: parseInt(e.target.value, 10) || 0 }))} /></FormControl>
                 <FormControl><FormLabel>Assign Services</FormLabel><Box position="relative"><Input placeholder="Type to search services..." value={serviceInput} onChange={e => setServiceInput(e.target.value)} mb={2} /><Flex wrap="wrap" gap={2}>{form.assignedServices.map(serviceId => { const service = services.find(s => s.id === serviceId); return (<Tag key={serviceId} colorScheme="orange" borderRadius="full"><TagLabel>{service ? service.name : serviceId}</TagLabel><TagCloseButton onClick={() => removeServiceTag(serviceId)} /></Tag>);})}</Flex>{serviceInput && <Box borderWidth={1} borderRadius="md" bg="white" mt={1} maxH="150px" overflowY="auto" zIndex={20} position="absolute" w="100%" boxShadow="lg">{services.filter(s => s.name.toLowerCase().includes(serviceInput.toLowerCase()) && !form.assignedServices.includes(s.id)).map(s => (<Box key={s.id} px={3} py={2} _hover={{ bg: "orange.50", cursor: "pointer" }} onClick={() => {addServiceTag(s.id); setServiceInput("");}}>{s.name}</Box>))}</Box>}</Box></FormControl>
                 <FormControl display="flex" alignItems="center"><FormLabel htmlFor="autoAccept" mb="0">Auto Accept</FormLabel><Switch id="autoAccept" isChecked={form.autoAccept} onChange={e => setForm(f => ({ ...f, autoAccept: e.target.checked }))} /></FormControl>
                 <FormControl><FormLabel>Status</FormLabel><Select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}><option value="active">Active</option><option value="suspended">Suspended</option></Select></FormControl>

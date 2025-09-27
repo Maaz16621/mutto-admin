@@ -1,8 +1,8 @@
 
-const { firestore } = require('firebase-functions/v1');
+const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 
-exports.handleBookingNotification = firestore
+exports.handleBookingNotification = functions.firestore
   .document('bookings/{bookingId}')
   .onWrite(async (change, context) => {
     const bookingId = context.params.bookingId;

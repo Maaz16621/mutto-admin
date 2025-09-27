@@ -1,0 +1,21 @@
+
+const admin = require('firebase-admin');
+admin.initializeApp();
+
+const { createStripeCustomer } = require('./src/createStripeCustomer');
+const { createSetupIntent } = require('./src/createSetupIntent');
+const { createPaymentIntent } = require('./src/createPaymentIntent');
+const { getAvailableTimeSlotsV2 } = require('./src/getAvailableTimeSlotsV2');
+const { handleBookingNotification } = require('./src/handleBookingNotification');
+const { sendPushOnNewNotification } = require('./src/sendPushOnNewNotification');
+const { scheduleBookingReminder } = require('./src/scheduleBookingReminder');
+const { sendChatNotification } = require('./src/sendChatNotification');
+
+exports.createStripeCustomer = createStripeCustomer;
+exports.createSetupIntent = createSetupIntent;
+exports.createPaymentIntent = createPaymentIntent;
+exports.getAvailableTimeSlotsV2 = getAvailableTimeSlotsV2;
+exports.handleBookingNotification = handleBookingNotification;
+exports.sendPushOnNewNotification = sendPushOnNewNotification;
+exports.scheduleBookingReminder = scheduleBookingReminder;
+exports.sendChatNotification = sendChatNotification;
