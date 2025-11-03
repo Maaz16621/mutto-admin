@@ -1,12 +1,19 @@
 
 const functions = require('firebase-functions/v1');
 const { getStripe } = require('../utils/helpers');
+const { logError } = require('../utils/logger');
 
 exports.createStripeCustomer = functions.https.onCall(async (data, context) => {
-  const email = data.email;
+  const { email } = data;
 
   if (!email) {
-    throw new functions.https.HttpsError('invalid-argument', 'Email is required.');
+    const error = new functions.https.HttpsError('invalid-argument', 'Email is required.');
+    await logError(error, {
+      message: error,
+      data,
+      context,
+    });
+    throw error;
   }
 
   try {
@@ -14,6 +21,11 @@ exports.createStripeCustomer = functions.https.onCall(async (data, context) => {
     return { customerId: customer.id };
   } catch (error) {
     console.error('Error creating Stripe customer:', error);
+    await logError(error, {
+      message:error,
+      data,
+      context,
+    });
     throw new functions.https.HttpsError('internal', 'Unable to create Stripe customer.', error.message);
   }
 });

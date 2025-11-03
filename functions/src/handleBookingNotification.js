@@ -9,6 +9,10 @@ exports.handleBookingNotification = functions.firestore
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
+    if (afterData.reminderSent) {
+      return null;
+    }
+
     // Case 1: User books a service (New booking)
     if (!beforeData && afterData) {
       // Notify all relevant staff

@@ -38,7 +38,7 @@ const InvoiceTemplate = ({ booking }) => {
           <Text fontSize="md"># {id}</Text>
           <Box mt={6}>
             <Text fontSize="sm" color="gray.500">Total Amount</Text>
-            <Heading as="h2" size="lg" mt={1}>AED{totalAmount ? totalAmount.toFixed(2) : total.toFixed(2)}</Heading>
+            <Heading as="h2" size="lg" mt={1}>AED{totalAmount ? totalAmount : total.toFixed(2)}</Heading>
           </Box>
         </Box>
       </Flex>

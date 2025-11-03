@@ -70,7 +70,15 @@ const center = {
   lng: 55.2708
 };
 
-const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails, existingBookings = []) => {
+const generateTimeSlots = (
+  date,
+  companySettings,
+  workerDetails,
+  serviceDetails,
+  existingBookings = [],
+  selectedAddonIds = [],
+  allAddons = []
+) => {
   const slots = [];
   const dayOfWeek = new Date(date).toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
 
@@ -96,8 +104,18 @@ const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails,
   const endHour = Math.min(parseInt(companyWorkingHours.end.split(':')[0]), parseInt(workerWorkingHours.end.split(':')[0]));
   const endMinute = Math.min(parseInt(companyWorkingHours.end.split(':')[1]), parseInt(workerWorkingHours.end.split(':')[1]));
 
-  const serviceDuration = serviceDetails?.duration || 60; // Default to 60 minutes if not found
-  const bufferTime = serviceDetails?.bufferTime || 0; // Default to 0 minutes if not found
+  // Calculate total duration: service + buffer + selected addons
+  let serviceDuration = serviceDetails?.duration || 60;
+  const bufferTime = serviceDetails?.bufferTime || 0;
+  // Add selected addons duration
+  if (selectedAddonIds && selectedAddonIds.length > 0) {
+    selectedAddonIds.forEach(addonId => {
+      const addonObj = allAddons.find(a => a.id === addonId);
+      if (addonObj && addonObj.time) {
+        serviceDuration += Number(addonObj.time);
+      }
+    });
+  }
   const totalDuration = serviceDuration + bufferTime;
 
   let currentHour = startHour;
@@ -117,20 +135,46 @@ const generateTimeSlots = (date, companySettings, workerDetails, serviceDetails,
   const currentMinuteUAE = parseInt(now.toLocaleString('en-US', { minute: '2-digit', timeZone: 'Asia/Dubai' }));
 
   while (currentHour * 60 + currentMinute < endHour * 60 + endMinute) {
-    const slotStartHour = currentHour;
-    const slotStartMinute = currentMinute;
+    let slotStartHour = currentHour;
+    let slotStartMinute = currentMinute;
+
+    // Add driving time if previous booking exists for worker
+    const previousBooking = existingBookings
+      .filter(b => b.selectedTime)
+      .sort((a, b) => {
+        // Sort by end time
+        const aEnd = parseTimeStrToMinutes(a.selectedTime.split(' to ')[1]);
+        const bEnd = parseTimeStrToMinutes(b.selectedTime.split(' to ')[1]);
+        return aEnd - bEnd;
+      })
+      .reverse()
+      .find(b => {
+        const bookingEnd = parseTimeStrToMinutes(b.selectedTime.split(' to ')[1]);
+        const slotStart = slotStartHour * 60 + slotStartMinute;
+        return bookingEnd <= slotStart;
+      });
+
+    let drivingTime = 0;
+    if (previousBooking) {
+      drivingTime = 15; // 15 minutes driving time
+      slotStartMinute += drivingTime;
+      if (slotStartMinute >= 60) {
+        slotStartHour += Math.floor(slotStartMinute / 60);
+        slotStartMinute %= 60;
+      }
+    }
 
     // Check if the selected date is today and if the slot start time has already passed
     if (date === today) {
       const slotStartInMinutes = slotStartHour * 60 + slotStartMinute;
       const currentInMinutesUAE = currentHourUAE * 60 + currentMinuteUAE;
       if (slotStartInMinutes <= currentInMinutesUAE) {
-        currentMinute += totalDuration; // Move to the next slot
+        currentMinute += totalDuration;
         if (currentMinute >= 60) {
           currentHour += Math.floor(currentMinute / 60);
           currentMinute %= 60;
         }
-        continue; // Skip this slot and proceed to the next iteration
+        continue;
       }
     }
 
@@ -361,21 +405,41 @@ export default function Bookings() {
     try {
       await addDoc(collection(firestore, "bookings"), {
         userId: newBooking.user?.id || null,
-        customerName: newBooking.user?.fullName || userSearchTerm, // Use userSearchTerm for new users
+        customerName: newBooking.user?.fullName || userSearchTerm,
         phone: newBooking.phone,
         email: newBooking.email,
-        selectedAddress: newBooking.selectedAddress,
+        selectedAddress: {
+          id: newBooking.selectedAddress.id,
+          address: newBooking.selectedAddress.address,
+          latitude: newBooking.selectedAddress.latitude,
+          longitude: newBooking.selectedAddress.longitude,
+          name: newBooking.selectedAddress.name,
+          type: newBooking.selectedAddress.type,
+        },
         serviceId: newBooking.service?.id || null,
         serviceName: newBooking.service?.name || null,
+        serviceMainImageUrl: newBooking.service?.mainImageUrl || null,
+        mainCategoryName: newBooking.service?.mainCategoryName || null,
+        subCategoryName: newBooking.service?.subCategoryName || null,
         workerId: newBooking.selectedWorker?.id || null,
-        workerName: newBooking.selectedWorker?.fullName || null,
-        vehicle: newBooking.vehicle, // Changed from vehicle to selectedVehicle
-        addons: newBooking.addons,
+        workerName: newBooking.selectedWorker?.fullName || newBooking.selectedWorker?.userName || null,
+        vehicle: {
+          id: newBooking.vehicle?.id,
+          company: newBooking.vehicle?.company,
+          model: newBooking.vehicle?.model,
+          modelYear: newBooking.vehicle?.modelYear,
+          color: newBooking.vehicle?.color,
+          plateNumberPart1: newBooking.vehicle?.plateNumberPart1,
+          plateNumberPart2: newBooking.vehicle?.plateNumberPart2,
+          userId: newBooking.user?.id || null,
+        },
+        addons: Array.isArray(newBooking.addons) ? newBooking.addons : [],
         paymentMethod: newBooking.paymentMethod,
         selectedDate: newBooking.selectedDate,
         selectedTime: newBooking.selectedTime,
-        createdAt: serverTimestamp(),
+        totalAmount: '', // Set this as needed
         status: 'confirmed',
+        createdAt: serverTimestamp(),
       });
       toast({ title: "Booking created", status: "success" });
       fetchBookings();
@@ -476,26 +540,61 @@ export default function Bookings() {
     }
   }, [globalFilter, setTableGlobalFilter, bookings, toggleAllRowsExpanded]);
 
-  const eligibleWorkersForServiceAndLocation = useMemo(() => {
-    if (!newBooking.service || !newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) return [];
+ const eligibleWorkersForServiceAndLocation = useMemo(() => {
+  if (!newBooking.service || !newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude) {
+    return [];
+  }
 
-    const serviceId = newBooking.service.id;
+  const serviceId = newBooking.service.id;
 
-    return workers.filter(worker => {
-      // Check if worker provides the service
-      if (!worker.assignedServices || !worker.assignedServices.includes(serviceId)) {
+  return workers.filter(worker => {
+    // Must provide the service
+    if (!Array.isArray(worker.assignedServices) || !worker.assignedServices.includes(serviceId)) {
+      return false;
+    }
+
+    // Must have service areas
+    if (!Array.isArray(worker.serviceArea) || worker.serviceArea.length === 0) {
+      return false;
+    }
+
+    const customerLat = newBooking.selectedAddress.latitude;
+    const customerLng = newBooking.selectedAddress.longitude;
+    const customerLatLng = new window.google.maps.LatLng(customerLat, customerLng);
+
+    // Check all service areas for a match
+    return worker.serviceArea.some(area => {
+      try {
+        const geo = JSON.parse(area.geometry);
+        if (!geo?.type || !geo?.coordinates) return false;
+
+        if (geo.type === "Point") {
+          // Handle circular area
+          const [lng, lat] = geo.coordinates;
+          const radius = geo.properties?.radius || 0;
+          const distance = calculateDistance(
+            { lat, lng },
+            { lat: customerLat, lng: customerLng }
+          );
+          return distance <= radius;
+        }
+
+        if (geo.type === "Polygon") {
+          // Handle polygon area
+          const polygonCoords = geo.coordinates[0].map(([lng, lat]) => new window.google.maps.LatLng(lat, lng));
+          const polygon = new window.google.maps.Polygon({ paths: polygonCoords });
+          return window.google.maps.geometry.poly.containsLocation(customerLatLng, polygon);
+        }
+
+        return false;
+      } catch (err) {
+        console.warn("Invalid geometry for worker", worker.userName, err);
         return false;
       }
-
-      // Check if worker covers the service area
-      if (!worker.serviceArea || !worker.serviceArea.geometry || !worker.serviceArea.geometry.coordinates) {
-        return false;
-      }
-      const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
-      const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
-      return distance <= worker.serviceArea.properties.radius;
     });
-  }, [newBooking.service, newBooking.selectedAddress, workers]);
+  });
+}, [newBooking.service, newBooking.selectedAddress, workers]);
+
 
   useEffect(() => {
     if (eligibleWorkersForServiceAndLocation.length > 0) {
@@ -505,45 +604,58 @@ export default function Bookings() {
     }
   }, [eligibleWorkersForServiceAndLocation]);
 
-  const availableServices = useMemo(() => {
-    if (!newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude || !isLoaded) {
-      return [];
-    }
+const availableServices = useMemo(() => {
+  if (!newBooking.selectedAddress?.latitude || !newBooking.selectedAddress?.longitude || !isLoaded) {
+    return [];
+  }
 
-    const eligibleWorkerServiceIds = new Set();
-    const customerLatLng = new window.google.maps.LatLng(newBooking.selectedAddress.latitude, newBooking.selectedAddress.longitude);
+  const eligibleWorkerServiceIds = new Set();
+  const customerLat = newBooking.selectedAddress.latitude;
+  const customerLng = newBooking.selectedAddress.longitude;
+  const customerLatLng = new window.google.maps.LatLng(customerLat, customerLng);
 
-    workers.forEach(worker => {
-      if (worker.serviceArea && worker.serviceArea.geometry && worker.serviceArea.geometry.coordinates) {
-        if (worker.serviceArea.geometry.type === 'Point' && worker.serviceArea.properties && worker.serviceArea.properties.radius) {
-          const workerCoords = { lat: worker.serviceArea.geometry.coordinates[1], lng: worker.serviceArea.geometry.coordinates[0] };
-          const distance = calculateDistance(workerCoords, { lat: newBooking.selectedAddress.latitude, lng: newBooking.selectedAddress.longitude });
-          if (distance <= worker.serviceArea.properties.radius) {
-            if (Array.isArray(worker.assignedServices)) {
-              worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
-            }
-          }
-        } else if (worker.serviceArea.geometry.type === 'Polygon') {
-          const polygonCoords = worker.serviceArea.geometry.coordinates.map(p => new window.google.maps.LatLng(p.lat, p.lng));
-          const polygon = new window.google.maps.Polygon({ paths: polygonCoords });
-          if (window.google.maps.geometry.poly.containsLocation(customerLatLng, polygon)) {
-            if (Array.isArray(worker.assignedServices)) {
-              worker.assignedServices.forEach(serviceId => eligibleWorkerServiceIds.add(serviceId));
-            }
-          }
+  workers.forEach(worker => {
+    if (!Array.isArray(worker.serviceArea)) return;
+
+    const isWithinAnyArea = worker.serviceArea.some(area => {
+      try {
+        const geo = JSON.parse(area.geometry);
+        if (geo.type === "Point") {
+          const [lng, lat] = geo.coordinates;
+          const radius = geo.properties?.radius || 0;
+          const distance = calculateDistance({ lat, lng }, { lat: customerLat, lng: customerLng });
+          return distance <= radius;
         }
+        if (geo.type === "Polygon") {
+          const polygonCoords = geo.coordinates[0].map(([lng, lat]) => new window.google.maps.LatLng(lat, lng));
+          const polygon = new window.google.maps.Polygon({ paths: polygonCoords });
+          return window.google.maps.geometry.poly.containsLocation(customerLatLng, polygon);
+        }
+        return false;
+      } catch {
+        return false;
       }
     });
-    const filtered = services.filter(service => eligibleWorkerServiceIds.has(service.id));
-    return filtered;
-  }, [newBooking.selectedAddress, workers, services, isLoaded]);
+
+    if (isWithinAnyArea && Array.isArray(worker.assignedServices)) {
+      worker.assignedServices.forEach(sid => eligibleWorkerServiceIds.add(sid));
+    }
+  });
+
+  return services.filter(s => eligibleWorkerServiceIds.has(s.id));
+}, [newBooking.selectedAddress, workers, services, isLoaded]);
 
   const availableAddons = useMemo(() => {
-    if (!newBooking.service) return [];
-    const service = services.find(s => s.id === newBooking.service.id);
-    if (!service || !service.relatedServices) return [];
-    return addons.filter(addon => service.relatedServices.includes(addon.id));
-  }, [newBooking.service, services, addons]);
+    if (!newBooking.selectedWorker) return [];
+    const assignedServiceIds = Array.isArray(newBooking.selectedWorker.assignedServices)
+      ? newBooking.selectedWorker.assignedServices
+      : [];
+    // Show addons where addon.assignedServices includes any of the worker's assignedServices
+    return addons.filter(addon =>
+      Array.isArray(addon.assignedServices) &&
+      addon.assignedServices.some(sid => assignedServiceIds.includes(sid))
+    );
+  }, [newBooking.selectedWorker, addons]);
 
   const userAddresses = useMemo(() => {
     if (newBooking.user && newBooking.user.addresses) {
@@ -581,9 +693,11 @@ export default function Bookings() {
       appSettings,
       newBooking.selectedWorker,
       newBooking.service,
-      workerBookingsOnSelectedDate
+      workerBookingsOnSelectedDate,
+      newBooking.addons, // Pass selected addon IDs
+      addons // Pass all addons for duration lookup
     );
-  }, [newBooking.selectedDate, newBooking.selectedWorker, newBooking.service, appSettings, bookings]);
+  }, [newBooking.selectedDate, newBooking.selectedWorker, newBooking.service, appSettings, bookings, newBooking.addons, addons]);
 
   const filteredUsers = useMemo(() => {
     if (!userSearchTerm) return [];
@@ -726,6 +840,8 @@ export default function Bookings() {
       "Service What's Included",
       "Status",
       "Total Amount",
+      "Tip Amount",
+      "Tip Payment Method",
       "Worker Name",
       "Worker Email",
       "Worker Phone",
@@ -760,6 +876,8 @@ export default function Bookings() {
         (booking.serviceDetails?.whatsIncluded || []).join('; '),
         booking.status || '',
         booking.totalAmount || '',
+        booking.tipAmount || '',
+        booking.tipPaymentMethod || '',
         booking.workerName || booking.workerDetails?.fullName || '',
         booking.workerDetails?.email || '',
         booking.workerDetails?.phone || '',
@@ -939,6 +1057,14 @@ export default function Bookings() {
                 <Text>Status: {viewBooking.status}</Text>
                 <Text>Date & Time: {viewBooking.selectedDate} {viewBooking.selectedTime}</Text>
 
+                {viewBooking.tipAmount && (
+                  <>
+                    <Heading size="md" mt={4}>Tip Information</Heading>
+                    <Text>Tip Amount: {viewBooking.tipAmount}</Text>
+                    {viewBooking.tipPaymentMethod && <Text>Tip Payment Method: {viewBooking.tipPaymentMethod}</Text>}
+                  </>
+                )}
+
                 {viewBooking.addons && viewBooking.addons.length > 0 && (
                   <>
                     <Heading size="md" mt={4}>Addons</Heading>
@@ -950,16 +1076,15 @@ export default function Bookings() {
               </Box>
             </ModalBody>
             <ModalFooter>
-              {viewBooking.status !== 'cancelled' && (
-                <>               
-                 <Button colorScheme="red" mr={3} onClick={() => handleCancel(viewBooking.id)} isLoading={loading}>
+              {!['cancelled', 'completed', 'under progress'].includes(viewBooking.status.toLowerCase()) && (
+                <Button colorScheme="red" mr={3} onClick={() => handleCancel(viewBooking.id)} isLoading={loading}>
                   Cancel Booking
                 </Button>
+              )}
+              {viewBooking.status !== 'cancelled' && (
                 <Button colorScheme="blue" mr={3} onClick={handleGenerateInvoice}>
                   Generate Invoice
                 </Button>
-                </>
-
               )}
               <Button variant="ghost" onClick={onViewClose}>Close</Button>
             </ModalFooter>
@@ -1142,6 +1267,21 @@ export default function Bookings() {
                       {availableServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
                     </Select>
                   </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Addons</FormLabel>
+                    <CheckboxGroup
+                      value={newBooking.addons}
+                      onChange={(values) => setNewBooking({ ...newBooking, addons: values })}
+                    >
+                      <Stack direction="column">
+                        {availableAddons.map(addon => (
+                          <Checkbox key={addon.id} value={addon.id}>
+                            {addon.name} {addon.time ? `(+${addon.time} min)` : ""}
+                          </Checkbox>
+                        ))}
+                      </Stack>
+                    </CheckboxGroup>
+                  </FormControl>
                   <FormControl mt={4} w="100%">
                     <FormLabel>Date</FormLabel>
                     <DatePicker
@@ -1222,14 +1362,6 @@ export default function Bookings() {
                         </FormControl>
                       </Box>
                     )}
-                  </FormControl>
-                  <FormControl mt={4}>
-                    <FormLabel>Addons</FormLabel>
-                    <CheckboxGroup onChange={(values) => setNewBooking({ ...newBooking, addons: values })}>
-                      <Stack direction="column">
-                        {availableAddons.map(addon => <Checkbox key={addon.id} value={addon.id}>{addon.name}</Checkbox>)}
-                      </Stack>
-                    </CheckboxGroup>
                   </FormControl>
                   <FormControl mt={4}>
                     <FormLabel>Payment Method</FormLabel>

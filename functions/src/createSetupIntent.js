@@ -1,12 +1,19 @@
 
 const functions = require('firebase-functions/v1');
 const { getStripe } = require('../utils/helpers');
+const { logError } = require('../utils/logger');
 
 exports.createSetupIntent = functions.https.onCall(async (data, context) => {
-  const customerId = data.customerId;
+  const { customerId } = data;
 
   if (!customerId) {
-    throw new functions.https.HttpsError('invalid-argument', 'Customer ID is required.');
+    const error = new functions.https.HttpsError('invalid-argument', 'Customer ID is required.');
+    await logError(error, {
+      message: error,
+      data,
+      context,
+    });
+    throw error;
   }
 
   try {
@@ -17,6 +24,11 @@ exports.createSetupIntent = functions.https.onCall(async (data, context) => {
     return { clientSecret: setupIntent.client_secret };
   } catch (error) {
     console.error('Error creating SetupIntent:', error);
+    await logError(error, {
+      message: error,
+      data,
+      context,
+    });
     throw new functions.https.HttpsError('internal', 'Unable to create SetupIntent.', error.message);
   }
 });

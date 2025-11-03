@@ -9,77 +9,83 @@ const { sendNotification } = require('../utils/helpers');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-exports.scheduleBookingReminder = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
-  console.log('Running scheduleBookingReminder...');
-
+exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').timeZone('Asia/Dubai').onRun(async (context) => {
   const nowUAE = dayjs().tz('Asia/Dubai');
 
   try {
     const bookingsSnapshot = await admin.firestore().collection('bookings')
       .where('status', '==', 'confirmed')
-      .where('reminderSent', '!=', true) // Only get bookings that haven't sent a reminder
       .get();
-
-    console.log(`Found ${bookingsSnapshot.docs.length} confirmed bookings without a reminder sent.`);
 
     for (const doc of bookingsSnapshot.docs) {
       const booking = doc.data();
       const bookingId = doc.id;
 
-      // Ensure selectedDate and selectedTime exist
       if (!booking.selectedDate || !booking.selectedTime) {
         console.warn(`Booking ${bookingId} is missing selectedDate or selectedTime. Skipping.`);
         continue;
       }
 
-      // Parse booking time in UAE timezone
-      // Assuming selectedTime is like "10:00 AM to 11:00 AM", we take the start time
       const bookingStartTimeStr = booking.selectedTime.split(' to ')[0];
       const bookingDateTimeUAE = dayjs(`${booking.selectedDate} ${bookingStartTimeStr}`, 'YYYY-MM-DD hh:mm A').tz('Asia/Dubai');
 
-      // Calculate 6-hour reminder time
-      const reminderTimeUAE = bookingDateTimeUAE.subtract(6, 'hour');
+      // --- Handle User Reminder ---
+      const isBookingToday = nowUAE.isSame(bookingDateTimeUAE, 'day');
+      if (isBookingToday && !booking.userReminderSent) {
+        const userReminderTimeUAE = bookingDateTimeUAE.subtract(6, 'hour');
+        if (nowUAE.isAfter(userReminderTimeUAE) && nowUAE.isBefore(bookingDateTimeUAE)) {
+          const userId = booking.userId;
+          if (userId) {
+            const userDoc = await admin.firestore().collection('users').doc(userId).get();
+            if (userDoc.exists && userDoc.data().expoPushToken) {
+              let serviceName = 'your booked service';
+              if (booking.serviceId) {
+                const serviceDoc = await admin.firestore().collection('services').doc(booking.serviceId).get();
+                if (serviceDoc.exists) {
+                  serviceName = serviceDoc.data().name || serviceName;
+                }
+              }
 
-      console.log(`Booking ${bookingId}: Booking Time (UAE): ${bookingDateTimeUAE.format()}, Reminder Time (UAE): ${reminderTimeUAE.format()}`);
-      console.log(`Current Time (UAE): ${nowUAE.format()}`);
-
-      // Check if the reminder time falls within the next hour window
-      // i.e., reminderTimeUAE is between nowUAE (inclusive) and nowUAE + 1 hour (exclusive)
-      if (reminderTimeUAE.isSameOrAfter(nowUAE, 'minute') && reminderTimeUAE.isBefore(nowUAE.add(61, 'minute'), 'minute')) {
-        console.log(`Booking ${bookingId} is due for a 6-hour reminder!`);
-
-        const userId = booking.userId;
-        if (!userId) {
-          console.warn(`Booking ${bookingId} has no userId. Skipping notification.`);
-          continue;
+              const userToken = userDoc.data().expoPushToken;
+              const title = 'Booking Reminder';
+              const body = `Your ${serviceName} booking is scheduled in about 6 hours.`;
+              await sendNotification([userToken], title, body, { bookingId }, [userId], 'user', false);
+            }
+          }
+          await doc.ref.update({ userReminderSent: true, reminderSent: true });
         }
+      }
 
-        const userDoc = await admin.firestore().collection('users').doc(userId).get();
-        if (!userDoc.exists) {
-          console.warn(`User ${userId} not found for booking ${bookingId}. Skipping notification.`);
-          continue;
+      // --- Handle Worker Reminder ---
+      if (isBookingToday && !booking.workerReminderSent) {
+        const workerId = booking.workerId;
+        if (workerId) {
+          const workerDoc = await admin.firestore().collection('workers').doc(workerId).get();
+          if (workerDoc.exists) {
+            const workerData = workerDoc.data();
+            const drivingTime = workerData.drivingTime || 0; // Default to 0 if not set
+            const workerReminderOffset = drivingTime + 15; // driving time + 15 minutes
+            const workerReminderTimeUAE = bookingDateTimeUAE.subtract(workerReminderOffset, 'minute');
+
+            if (nowUAE.isAfter(workerReminderTimeUAE) && nowUAE.isBefore(bookingDateTimeUAE)) {
+              if (workerData.expoPushToken) {
+                let serviceName = 'a service';
+                if (booking.serviceId) {
+                  const serviceDoc = await admin.firestore().collection('services').doc(booking.serviceId).get();
+                  if (serviceDoc.exists) {
+                    serviceName = serviceDoc.data().name || serviceName;
+                  }
+                }
+
+                const workerToken = workerData.expoPushToken;
+                const title = 'Booking Reminder';
+                const body = `You have a booking for ${serviceName} at ${bookingStartTimeStr}.`;
+                await sendNotification([workerToken], title, body, { bookingId }, [workerId], 'worker', false);
+              }
+              await doc.ref.update({ workerReminderSent: true, reminderSent: true });
+            }
+          }
         }
-
-        const userToken = userDoc.data().expoPushToken;
-        if (userToken) {
-          const title = 'Booking Reminder';
-          const body = `Your booking #${bookingId} is scheduled in 6 hours at ${bookingStartTimeStr} on ${booking.selectedDate}.`;
-          const data = { bookingId };
-
-          await sendNotification([userToken], title, body, data, [userId], 'user', true);
-          console.log(`Sent reminder for booking ${bookingId} to user ${userId}.`);
-
-          // Mark booking as reminderSent
-          await doc.ref.update({ reminderSent: true });
-          console.log(`Marked booking ${bookingId} as reminderSent.`);
-        } else {
-          console.log(`User ${userId} has no Expo push token for booking ${bookingId}. Skipping push notification.`);
-          // Still mark as reminderSent to avoid re-processing
-          await doc.ref.update({ reminderSent: true });
-          console.log(`Marked booking ${bookingId} as reminderSent (no token).`);
-        }
-      } else {
-        console.log(`Booking ${bookingId} reminder not due yet or already passed.`);
       }
     }
   } catch (error) {
@@ -87,3 +93,4 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 60 minutes').
   }
   return null;
 });
+

@@ -32,7 +32,7 @@ exports.sendChatNotification = firestore
     let senderName = 'Someone';
     let recipientToken = null;
     let chatType = 'user'; // Default chat type
-    let participantId = recipientId; // The other participant's ID
+    let participantId = senderId; // The other participant's ID
     let otherParticipantName = 'Someone';
 
     // Function to get a user's document from either 'users' or 'workers' collection
@@ -54,12 +54,14 @@ exports.sendChatNotification = firestore
       senderName = senderInfo.doc.data().userName || 'Someone';
     }
 
-    // Fetch recipient's document to get their push token and determine chat type/name
+    // Fetch recipient's document to get their push token, name and set chatType
     const recipientInfo = await getUserDoc(recipientId);
     if (recipientInfo.doc && recipientInfo.doc.exists) {
       recipientToken = recipientInfo.doc.data().expoPushToken;
       otherParticipantName = recipientInfo.doc.data().userName || 'Someone';
       if (recipientInfo.type === 'worker') {
+        chatType = 'user';
+      } else {
         chatType = 'worker';
       }
     }

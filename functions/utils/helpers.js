@@ -3,6 +3,10 @@ const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 let stripe;
 const getStripe = () => {
@@ -121,31 +125,17 @@ function isPointInPolygon(point, polygon) {
 
 const formatTime = (date) => date.format('hh:mm A');
 
-const generateTimeSlots = (startTime, endTime, interval) => {
+const generateTimeSlots = (dateString, startTime, endTime, interval, timezone) => {
   const slots = [];
-  let [startHour, startMinute] = startTime.split(':').map(Number);
-  let [endHour, endMinute] = endTime.split(':').map(Number);
+  
+  let current = dayjs.tz(`${dateString} ${startTime}`, timezone);
+  let end = dayjs.tz(`${dateString} ${endTime}`, timezone);
 
-  let current = new Date();
-  current.setHours(startHour, startMinute, 0, 0);
+  while (current.isBefore(end)) {
+    const next = current.add(interval, 'minute');
+    if (next.isAfter(end)) break;
 
-  let end = new Date();
-  end.setHours(endHour, endMinute, 0, 0);
-
-  while (current.getTime() < end.getTime()) {
-    const next = new Date(current.getTime() + interval * 60 * 1000);
-    if (next.getTime() > end.getTime()) break;
-
-    const formatTime = (date) => {
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
-      const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
-      return `${formattedHours}:${formattedMinutes} ${ampm}`;
-    };
-
-    slots.push(`${formatTime(current)} to ${formatTime(next)}`);
+    slots.push(`${current.format('hh:mm A')} to ${next.format('hh:mm A')}`);
     current = next;
   }
   return slots;

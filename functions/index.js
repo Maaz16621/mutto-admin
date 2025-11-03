@@ -10,6 +10,8 @@ const { handleBookingNotification } = require('./src/handleBookingNotification')
 const { sendPushOnNewNotification } = require('./src/sendPushOnNewNotification');
 const { scheduleBookingReminder } = require('./src/scheduleBookingReminder');
 const { sendChatNotification } = require('./src/sendChatNotification');
+const { releaseTimeSlot} = require('./src/releaseTimeSlot')
+const { reserveTimeSlot } = require('./src/reserveTimeSlot')
 
 exports.createStripeCustomer = createStripeCustomer;
 exports.createSetupIntent = createSetupIntent;
@@ -19,3 +21,5 @@ exports.handleBookingNotification = handleBookingNotification;
 exports.sendPushOnNewNotification = sendPushOnNewNotification;
 exports.scheduleBookingReminder = scheduleBookingReminder;
 exports.sendChatNotification = sendChatNotification;
+exports.reserveTimeSlot = reserveTimeSlot;
+exports.releaseTimeSlot = releaseTimeSlot

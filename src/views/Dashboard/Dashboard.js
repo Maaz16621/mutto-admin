@@ -1,4 +1,3 @@
-
 // Chakra imports
 import {
   Avatar,
@@ -160,11 +159,14 @@ export default function Dashboard() {
 
       snapshot.forEach(doc => {
         const booking = doc.data();
-        if (booking.status === 'completed') {
+        // Make status comparison case-insensitive
+        if (booking.status && booking.status.toLowerCase() === 'completed') {
           completedBookings++;
-          totalEarnings += booking.serviceDetails?.cost || 0;
+          // Use totalAmount if available, fallback to serviceDetails?.cost
+          const amount = Number(booking.totalAmount) || booking.serviceDetails?.cost || 0;
+          totalEarnings += amount;
           if (booking.selectedDate === today) {
-            todayMoney += booking.serviceDetails?.cost || 0;
+            todayMoney += amount;
           }
 
           // For monthly chart data
