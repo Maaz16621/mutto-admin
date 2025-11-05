@@ -64,6 +64,80 @@ export const getBarChartConfig = (monthlyBookingsData) => {
   };
 };
 
+export const getLineChartConfig = ({ labels, salesData, tipsData }) => {
+  return {
+    chartData: [
+      {
+        name: "Sales",
+        data: salesData,
+      },
+      {
+        name: "Tips",
+        data: tipsData,
+      },
+    ],
+    chartOptions: {
+      chart: {
+        toolbar: {
+          show: false,
+        },
+      },
+      tooltip: {
+        theme: "dark",
+      },
+      dataLabels: {
+        enabled: false,
+      },
+      stroke: {
+        curve: "smooth",
+      },
+      xaxis: {
+        type: "category",
+        categories: labels,
+        axisTicks: {
+          show: false
+        },
+        axisBorder: {
+          show: false,
+        },
+        labels: {
+          style: {
+            colors: "#fff",
+            fontSize: "12px",
+          },
+        },
+      },
+      yaxis: {
+        labels: {
+          style: {
+            colors: "#fff",
+            fontSize: "12px",
+          },
+        },
+      },
+      legend: {
+        show: false,
+      },
+      grid: {
+        strokeDashArray: 5,
+      },
+      fill: {
+        type: "gradient",
+        gradient: {
+          shade: "light",
+          type: "vertical",
+          shadeIntensity: 0.5,
+          inverseColors: true,
+          opacityFrom: 0.8,
+          opacityTo: 0,
+          stops: [],
+        },
+        colors: ["#fff", "#FF7D2E"],
+      },
+      colors: ["#fff", "#FF7D2E"],
+    },
+  };
+};
 
 export const lineChartData = [
   {

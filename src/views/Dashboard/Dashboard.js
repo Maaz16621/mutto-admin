@@ -42,7 +42,7 @@ import { Bar } from 'react-chartjs-2';
 import { collection, onSnapshot, query, doc, getDoc } from "firebase/firestore";
 import { firestore } from  "../../firebase";
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { getBarChartConfig, lineChartData, lineChartOptions } from "variables/charts";
+import { getBarChartConfig, getLineChartConfig } from "variables/charts";
 
 
 // Variables
@@ -92,10 +92,13 @@ export default function Dashboard() {
     todayBookings: 0,
     completedBookings: 0,
     totalEarnings: 0,
+    totalTips: 0,
   });
   const [currency, setCurrency] = useState("$");
   const [barChartData, setBarChartData] = useState({ labels: [], datasets: [] });
   const [barChartOptions, setBarChartOptions] = useState({});
+  const [lineChartData, setLineChartData] = useState([]);
+  const [lineChartOptions, setLineChartOptions] = useState({});
   const iconBlue = useColorModeValue("#FF7D2E", "#FF7D2E");
   const iconBoxInside = useColorModeValue("white", "white");
   const textColor = useColorModeValue("gray.700", "white");
@@ -114,24 +117,26 @@ export default function Dashboard() {
       const newWorkerJobs = {};
       const promises = [];
 
-      querySnapshot.forEach((doc) => {
-        const worker = { id: doc.id, ...doc.data() };
-        workersData.push(worker);
+     querySnapshot.forEach((workerDoc) => {
+  const worker = { id: workerDoc.id, ...workerDoc.data() };
+  workersData.push(worker);
 
-        if (worker.currentJobId) {
-          const jobPromise = getDoc(doc(firestore, "bookings", worker.currentJobId)).then((jobDoc) => {
-            if (jobDoc.exists()) {
-              newWorkerJobs[worker.id] = jobDoc.data();
-            }
-          });
-          promises.push(jobPromise);
-        }
-      });
+  if (worker.currentJobId) {
+    const jobPromise = getDoc(doc(firestore, "bookings", worker.currentJobId)).then((jobDoc) => {
+      if (jobDoc.exists()) {
+        newWorkerJobs[worker.id] = jobDoc.data();
+      }
+    });
+    promises.push(jobPromise);
+  }
+});
+
 
       Promise.all(promises).then(() => {
         setWorkerJobs(newWorkerJobs);
       });
 
+      console.log("Workers Data:", workersData);
       setWorkers(workersData);
     });
 
@@ -143,28 +148,34 @@ export default function Dashboard() {
       let todayMoney = 0;
       let todayBookings = 0;
       let completedBookings = 0;
+      let cancelledBookings = 0;
       let totalEarnings = 0;
+      let totalTips = 0;
 
       const today = new Date().toISOString().slice(0, 10);
 
-      const monthlyData = {};
+      const monthlySalesData = {};
+      const monthlyTipsData = {};
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
 
       for (let i = 0; i < 6; i++) {
         const date = new Date(currentYear, currentMonth - i, 1);
         const monthYear = `${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear().toString().slice(2)}`;
-        monthlyData[monthYear] = 0;
+        monthlySalesData[monthYear] = 0;
+        monthlyTipsData[monthYear] = 0;
       }
 
-      snapshot.forEach(doc => {
-        const booking = doc.data();
+      for (const document of snapshot.docs) {
+        const booking = document.data();
         // Make status comparison case-insensitive
         if (booking.status && booking.status.toLowerCase() === 'completed') {
           completedBookings++;
           // Use totalAmount if available, fallback to serviceDetails?.cost
           const amount = Number(booking.totalAmount) || booking.serviceDetails?.cost || 0;
+          const tip = Number(booking.tipAmount) || 0;
           totalEarnings += amount;
+          totalTips += tip;
           if (booking.selectedDate === today) {
             todayMoney += amount;
           }
@@ -173,25 +184,34 @@ export default function Dashboard() {
           if (booking.selectedDate) {
             const bookingDate = new Date(booking.selectedDate);
             const bookingMonthYear = `${bookingDate.toLocaleString('default', { month: 'short' })}-${bookingDate.getFullYear().toString().slice(2)}`;
-            if (monthlyData.hasOwnProperty(bookingMonthYear)) {
-              monthlyData[bookingMonthYear]++;
+            if (monthlySalesData.hasOwnProperty(bookingMonthYear)) {
+              monthlySalesData[bookingMonthYear] += amount;
+              monthlyTipsData[bookingMonthYear] += tip;
             }
           }
+        } else if (booking.status && booking.status.toLowerCase() === 'cancelled') {
+          cancelledBookings++;
         }
         if (booking.selectedDate === today) {
           todayBookings++;
         }
-      });
+      }
 
-      const labels = Object.keys(monthlyData).reverse();
-      const data = Object.values(monthlyData).reverse();
+      const labels = Object.keys(monthlySalesData).reverse();
+      const salesData = Object.values(monthlySalesData).reverse();
+      const tipsData = Object.values(monthlyTipsData).reverse();
 
-      setDashboardData({ todayMoney, todayBookings, completedBookings, totalEarnings });
+      setDashboardData({ todayMoney, todayBookings, completedBookings, totalEarnings, totalTips });
 
-      // Update chart data
-      const { chartData, chartOptions } = getBarChartConfig({ labels, data });
-      setBarChartData(chartData);
-      setBarChartOptions(chartOptions);
+      // Update Bar Chart data
+      const { chartData: barChartDataConfig, chartOptions: barChartOptionsConfig } = getBarChartConfig({ labels, data: salesData });
+      setBarChartData(barChartDataConfig);
+      setBarChartOptions(barChartOptionsConfig);
+
+      // Update Line Chart data
+      const { chartData: lineChartDataConfig, chartOptions: lineChartOptionsConfig } = getLineChartConfig({ labels, salesData, tipsData });
+      setLineChartData(lineChartDataConfig);
+      setLineChartOptions(lineChartOptionsConfig);
     });
 
     return () => bookingsUnsubscribe();
@@ -388,10 +408,7 @@ export default function Dashboard() {
               Sales Overview
             </Text>
             <Text color='#fff' fontSize='sm'>
-              <Text as='span' color='green.400' fontWeight='bold'>
-                (+5) more{" "}
-              </Text>
-              in 2022
+              in {new Date().getFullYear()}
             </Text>
           </Flex>
           <Box minH='300px'>
