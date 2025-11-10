@@ -37,7 +37,7 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
           const userId = booking.userId;
           if (userId) {
             const userDoc = await admin.firestore().collection('users').doc(userId).get();
-            if (userDoc.exists && userDoc.data().expoPushToken) {
+            if (userDoc.exists && userDoc.data().pushTokens && userDoc.data().pushTokens.length > 0) {
               let serviceName = 'your booked service';
               if (booking.serviceId) {
                 const serviceDoc = await admin.firestore().collection('services').doc(booking.serviceId).get();
@@ -46,10 +46,10 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
                 }
               }
 
-              const userToken = userDoc.data().expoPushToken;
+              const userTokens = userDoc.data().pushTokens;
               const title = 'Booking Reminder';
               const body = `Your ${serviceName} booking is scheduled in about 6 hours.`;
-              await sendNotification([userToken], title, body, { bookingId }, [userId], 'user', false);
+              await sendNotification(userTokens, title, body, { bookingId }, [userId], 'user', false);
             }
           }
           await doc.ref.update({ userReminderSent: true, reminderSent: true });

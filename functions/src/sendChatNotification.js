@@ -30,7 +30,7 @@ exports.sendChatNotification = firestore
 
     // --- 2. Get Sender's and Recipient's Information ---
     let senderName = 'Someone';
-    let recipientToken = null;
+    let recipientTokens = [];
     let chatType = 'user'; // Default chat type
     let participantId = senderId; // The other participant's ID
     let otherParticipantName = 'Someone';
@@ -57,22 +57,26 @@ exports.sendChatNotification = firestore
     // Fetch recipient's document to get their push token, name and set chatType
     const recipientInfo = await getUserDoc(recipientId);
     if (recipientInfo.doc && recipientInfo.doc.exists) {
-      recipientToken = recipientInfo.doc.data().expoPushToken;
       otherParticipantName = recipientInfo.doc.data().userName || 'Someone';
-      if (recipientInfo.type === 'worker') {
-        chatType = 'user';
-      } else {
+      if (recipientInfo.type === 'user') {
+        recipientTokens = recipientInfo.doc.data().pushTokens || [];
         chatType = 'worker';
+      } else if (recipientInfo.type === 'worker') {
+        const token = recipientInfo.doc.data().expoPushToken;
+        if (token) {
+          recipientTokens.push(token);
+        }
+        chatType = 'user';
       }
     }
 
     // --- 3. Send the Notification ---
-    if (recipientToken) {
-      console.log(`Found recipient token: ${recipientToken}`);
+    if (recipientTokens.length > 0) {
+      console.log(`Found recipient tokens: ${recipientTokens.join(', ')}`);
 
       // Construct the notification message payload for Expo
       const notificationPayload = {
-        to: recipientToken,
+        to: recipientTokens,
         sound: 'default',
         title: `New message from ${senderName}`,
         body: messageText,

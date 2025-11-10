@@ -28,11 +28,20 @@ exports.sendPushOnNewNotification = functions.firestore
       const doc = await admin.firestore().collection(collectionName).doc(userId).get();
       if (doc.exists) {
         const data = doc.data();
-        if (data.expoPushToken) {
-          await sendNotification([data.expoPushToken], title, body, notificationData.data || {}, [userId], userType, false);
+        let tokens = [];
+        if (userType === 'user') {
+          tokens = data.pushTokens || [];
+        } else {
+          if (data.expoPushToken) {
+            tokens.push(data.expoPushToken);
+          }
+        }
+
+        if (tokens.length > 0) {
+          await sendNotification(tokens, title, body, notificationData.data || {}, [userId], userType, false);
           console.log(`Push notification sent for new notification: ${title} to ${userType} ${userId}.`);
         } else {
-          console.log(`No Expo push token found for ${userType} ${userId}.`);
+          console.log(`No push tokens found for ${userType} ${userId}.`);
         }
       } else {
         console.log(`${userType} ${userId} not found.`);
@@ -59,8 +68,8 @@ exports.sendPushOnNewNotification = functions.firestore
 
       usersSnapshot.forEach(doc => {
         const data = doc.data();
-        if (data.expoPushToken) {
-          allTokens.push(data.expoPushToken);
+        if (data.pushTokens && data.pushTokens.length > 0) {
+          allTokens.push(...data.pushTokens);
           allUserIds.push(doc.id);
         }
       });
@@ -98,9 +107,16 @@ exports.sendPushOnNewNotification = functions.firestore
       const userIds = [];
       recipientsSnapshot.forEach(doc => {
         const data = doc.data();
-        if (data.expoPushToken) {
-          tokens.push(data.expoPushToken);
-          userIds.push(doc.id);
+        if (collectionName === 'users') {
+          if (data.pushTokens && data.pushTokens.length > 0) {
+            tokens.push(...data.pushTokens);
+            userIds.push(doc.id);
+          }
+        } else {
+          if (data.expoPushToken) {
+            tokens.push(data.expoPushToken);
+            userIds.push(doc.id);
+          }
         }
       });
 

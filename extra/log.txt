@@ -1,76 +1,62 @@
+bookingId
+"vWhX34DBgMCEJTTaTidX"
+(string)
 
-import { useState, useEffect, useRef } from 'react';
-import * as Location from 'expo-location';
-import { doc, getDoc, setDoc, GeoPoint } from 'firebase/firestore';
-import { db } from '../firebase';
-import { getAuth } from 'firebase/auth';
 
-export const useLocationTracking = () => {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const locationUpdateInterval = useRef<NodeJS.Timeout | null>(null);
-  const auth = getAuth();
-  const user = auth.currentUser;
+createdAt
+October 5, 2025 at 5:40:27 PM UTC+5
+(timestamp)
 
-  useEffect(() => {
-    const startLocationTracking = async () => {
-      if (!user) return;
 
-      const workerRef = doc(db, 'workers', user.uid);
-      const workerSnap = await getDoc(workerRef);
+feedbackText
+""
+(string)
 
-      if (!workerSnap.exists()) {
-        console.log('No such worker document!');
-        return;
-      }
 
-      const workerData = workerSnap.data();
-      const { dailyWorkingHours } = workerData;
+jobRating
+5
+(number)
 
-      if (!dailyWorkingHours || !dailyWorkingHours.start || !dailyWorkingHours.end) {
-        console.log('Working hours not set for this worker.');
-        return;
-      }
 
-      const now = new Date();
-      const startTime = new Date(now.toDateString() + ' ' + dailyWorkingHours.start);
-      const endTime = new Date(now.toDateString() + ' ' + dailyWorkingHours.end);
+serviceId
+"76cVchb5etsrLo72uKVd"
+(string)
 
-      if (now < startTime || now > endTime) {
-        console.log('Outside of working hours. Location tracking stopped.');
-        return;
-      }
 
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        return;
-      }
 
-      locationUpdateInterval.current = setInterval(async () => {
-        let currentLocation = await Location.getCurrentPositionAsync({});
-        setLocation(currentLocation);
+tags
+(array)
 
-        try {
-          await setDoc(workerRef, {
-            location: new GeoPoint(currentLocation.coords.latitude, currentLocation.coords.longitude),
-            lastUpdated: new Date(),
-          }, { merge: true });
-          console.log('Location updated for worker:', user.uid, 'at', currentLocation.coords.latitude, currentLocation.coords.longitude);
-        } catch (error) {
-          console.error('Error updating worker location:', error);
-        }
-      }, 30000); // 30 seconds
-    };
 
-    startLocationTracking();
+0
+"Professional"
+(string)
 
-    return () => {
-      if (locationUpdateInterval.current) {
-        clearInterval(locationUpdateInterval.current);
-      }
-    };
-  }, [user]);
 
-  return { location, errorMsg };
-};
+1
+"Excellent Service"
+(string)
+
+
+userId
+"Uc4A6a1VQRWTa4Jep928CNQYPkp2"
+(string)
+
+
+userImage
+"https://firebasestorage.googleapis.com/v0/b/mutto-84d97.firebasestorage.app/o/profile_images%2FUc4A6a1VQRWTa4Jep928CNQYPkp2?alt=media&token=a92b586c-eff1-441e-bef9-f6305dc0e454"
+(string)
+
+
+userName
+"Saad "
+(string)
+
+
+workerId
+"Vni4byaqNYQKpeczehTBv6c0abt1"
+(string)
+
+
+workerRating
+5
