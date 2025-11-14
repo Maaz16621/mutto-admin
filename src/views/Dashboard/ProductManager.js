@@ -4,6 +4,7 @@ import { SearchIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
+  Switch,
   Flex,
   Heading,
   Input,
@@ -36,7 +37,8 @@ import {
   MenuList,
   MenuItem,
   IconButton,
-  Textarea
+  Textarea,
+  HStack
 } from "@chakra-ui/react";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useTable, useSortBy, usePagination } from "react-table";
@@ -63,6 +65,9 @@ export default function ProductManager() {
     imageUrl: "",
     categoryId: "",
     subCategoryId: "",
+    availableSedan: true,
+    availableSuv: true,
+    availableVan: true,
   });
   const [productImageFile, setProductImageFile] = useState(null);
   const [productImagePreview, setProductImagePreview] = useState("");
@@ -159,6 +164,9 @@ export default function ProductManager() {
         categoryId: form.categoryId || "",
         subCategoryId: form.subCategoryId || "",
         updatedAt: serverTimestamp(),
+        availableSedan: form.availableSedan,
+        availableSuv: form.availableSuv,
+        availableVan: form.availableVan,
       };
       if (selectedProduct) {
         await updateDoc(doc(firestore, "products", selectedProduct.id), data);
@@ -172,7 +180,7 @@ export default function ProductManager() {
       }
       fetchProducts();
       onClose();
-      setForm({ name: "", cost: "", time: "", assignedServices: [], imageUrl: "", categoryId: "", subCategoryId: "" });
+      setForm({ name: "", description: "", cost: "", time: "", assignedServices: [], imageUrl: "", categoryId: "", subCategoryId: "", availableSedan: true, availableSuv: true, availableVan: true });
       setSelectedProduct(null);
       setServiceInput("");
       setProductImageFile(null);
@@ -197,8 +205,11 @@ export default function ProductManager() {
           imageUrl: product.imageUrl || "",
           categoryId: product.categoryId || "",
           subCategoryId: product.subCategoryId || "",
+          availableSedan: product.availableSedan !== undefined ? product.availableSedan : true,
+          availableSuv: product.availableSuv !== undefined ? product.availableSuv : true,
+          availableVan: product.availableVan !== undefined ? product.availableVan : true,
         }
-      : { name: "", description: "", cost: "", time: "", assignedServices: [], categoryId: "", subCategoryId: "" } // Added description
+      : { name: "", description: "", cost: "", time: "", assignedServices: [], categoryId: "", subCategoryId: "", availableSedan: true, availableSuv: true, availableVan: true } // Added description
     );
     setProductImageFile(null);
     setProductImagePreview(product && product.imageUrl ? product.imageUrl : "");
@@ -263,6 +274,9 @@ export default function ProductManager() {
     },
     { Header: "Cost", accessor: "cost" },
     { Header: "Time (min)", accessor: "time" },
+    { Header: "Sedan Available", accessor: "availableSedan", Cell: ({ value }) => value ? "Yes" : "No" },
+    { Header: "SUV Available", accessor: "availableSuv", Cell: ({ value }) => value ? "Yes" : "No" },
+    { Header: "Van Available", accessor: "availableVan", Cell: ({ value }) => value ? "Yes" : "No" },
     {
       Header: "Assigned Services",
       accessor: "assignedServices",
@@ -308,7 +322,7 @@ export default function ProductManager() {
         return s && s.name && s.name.toLowerCase().includes(q);
       }))
     );
-  }, [search, products, services]);
+  }, [search, products, services, categories, subCategories]);
 
   const {
     getTableProps,
@@ -528,6 +542,18 @@ export default function ProductManager() {
                       </Tooltip>
                     </FormLabel>
                     <Input type="number" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} min={0} />
+                  </FormControl>
+                  <FormControl mb={3} display="flex" alignItems="center">
+                    <FormLabel mb={0}>Available for Sedan</FormLabel>
+                    <Switch isChecked={form.availableSedan} onChange={e => setForm(f => ({ ...f, availableSedan: e.target.checked }))} />
+                  </FormControl>
+                  <FormControl mb={3} display="flex" alignItems="center">
+                    <FormLabel mb={0}>Available for SUV</FormLabel>
+                    <Switch isChecked={form.availableSuv} onChange={e => setForm(f => ({ ...f, availableSuv: e.target.checked }))} />
+                  </FormControl>
+                  <FormControl mb={3} display="flex" alignItems="center">
+                    <FormLabel mb={0}>Available for Van</FormLabel>
+                    <Switch isChecked={form.availableVan} onChange={e => setForm(f => ({ ...f, availableVan: e.target.checked }))} />
                   </FormControl>
                   <FormControl mb={3}>
                     <FormLabel display="flex" alignItems="center" gap={1}>

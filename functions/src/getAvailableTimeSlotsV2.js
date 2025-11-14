@@ -13,12 +13,12 @@ const { haversineDistance, isPointInPolygon, generateTimeSlots } = require('../u
 const UAE_TIMEZONE = 'Asia/Dubai';
 
 exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onCall(async (data, context) => {
-    const { serviceId, dateString, selectedAddress, bufferTime = 0, addons = [] } = data;
+    const { serviceId, dateString, selectedAddress, bufferTime = 0, addons = [], totalVehiclesCount } = data;
     if (!serviceId || !dateString || !selectedAddress) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
     }
 
-    console.log('getAvailableTimeSlots called with:', { serviceId, dateString, selectedAddress });
+    console.log('getAvailableTimeSlots called with:', { serviceId, dateString, selectedAddress, totalVehiclesCount });
 
     const userId = context.auth ? context.auth.uid : null; // Get current user ID if authenticated
 
@@ -28,10 +28,11 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const serviceRef = admin.firestore().collection('services').doc(serviceId);
         const workersCollection = admin.firestore().collection('workers').where('assignedServices', 'array-contains', serviceId);
 
-        const [settingsSnap, serviceSnap, workerSnapshot] = await Promise.all([
+        const [settingsSnap, serviceSnap, workerSnap, addonSnaps] = await Promise.all([
             settingsRef.get(),
             serviceRef.get(),
-            workersCollection.get()
+            workersCollection.get(),
+            addons && addons.length > 0 ? admin.firestore().collection('products').where(admin.firestore.FieldPath.documentId(), 'in', addons).get() : Promise.resolve(null)
         ]);
 
         if (!settingsSnap.exists) {
@@ -43,7 +44,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
 
         const appSettings = settingsSnap.data();
         const serviceData = { id: serviceSnap.id, ...serviceSnap.data() };
-        const workers = workerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const workers = workerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // **** START: Serviceability Check ****
         // Filter workers to find who can service the selected address.
@@ -96,11 +97,12 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         }
         // **** END: Serviceability Check ****
 
-        // Calculate total service duration including addons
-        let totalServiceDuration = serviceData.duration || 60;
-        if (addons && addons.length > 0) {
-            const productsRef = admin.firestore().collection('products');
-            const addonSnaps = await productsRef.where(admin.firestore.FieldPath.documentId(), 'in', addons).get();
+        // Calculate total service duration including addons and totalVehiclesCount
+        let baseServiceDuration = serviceData.duration || 60;
+        const effectiveVehiclesCount = totalVehiclesCount && totalVehiclesCount > 0 ? totalVehiclesCount : 1;
+        let totalServiceDuration = baseServiceDuration * effectiveVehiclesCount;
+
+        if (addonSnaps && addonSnaps.docs.length > 0) {
             const sumAddonTimes = addonSnaps.docs.reduce((sum, snap) => sum + (snap.data()?.time || 0), 0);
             totalServiceDuration += sumAddonTimes;
         }

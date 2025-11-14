@@ -57,7 +57,6 @@ export default function ServiceManager() {
     importantNotes: [],
     whatsIncluded: [],
     subCategoryId: "",
-    cost: "",
     duration: "",
     graceTime: "",
     bufferTime: "",
@@ -65,7 +64,12 @@ export default function ServiceManager() {
     availableSoon: false,
     imageUrls: [],
     mainImageUrl: "",
-    relatedServices: []
+    relatedServices: [],
+    pricing: {
+      sedan: { available: true, price: "" },
+      suv: { available: true, price: "" },
+      van: { available: true, price: "" },
+    }
   });
   const [includedItem, setIncludedItem] = useState("");
   const [noteItem, setNoteItem] = useState("");
@@ -116,8 +120,8 @@ export default function ServiceManager() {
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.subCategoryId || !form.cost || !form.duration) {
-      toast({ title: "Name, Sub-Category, Cost, and Duration are required", status: "warning" });
+    if (!form.name || !form.subCategoryId || !form.duration) {
+      toast({ title: "Name, Sub-Category, and Duration are required", status: "warning" });
       return;
     }
     setLoading(true);
@@ -167,7 +171,6 @@ export default function ServiceManager() {
         importantNotes: form.importantNotes,
         whatsIncluded: form.whatsIncluded,
         subCategoryId: form.subCategoryId,
-        cost: Number(form.cost),
         duration: Number(form.duration),
         graceTime: form.graceTime ? Number(form.graceTime) : 0,
         bufferTime: form.bufferTime ? Number(form.bufferTime) : 0,
@@ -177,6 +180,11 @@ export default function ServiceManager() {
         mainImageUrl: mainImageUrl,
         updatedAt: serverTimestamp(),
         relatedServices: form.relatedServices || [],
+        pricing: {
+          sedan: { available: form.pricing.sedan.available, price: Number(form.pricing.sedan.price) || 0 },
+          suv: { available: form.pricing.suv.available, price: Number(form.pricing.suv.price) || 0 },
+          van: { available: form.pricing.van.available, price: Number(form.pricing.van.price) || 0 },
+        }
       };
       if (selectedService) {
         await updateDoc(doc(firestore, "services", selectedService.id), data);
@@ -190,7 +198,7 @@ export default function ServiceManager() {
       }
       fetchServices();
       onClose();
-      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [] });
+      setForm({ name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [], pricing: { sedan: { available: true, price: "" }, suv: { available: true, price: "" }, van: { available: true, price: "" } } });
       setImageFiles([]);
       setImagePreviews([]);
       setUploadProgress(0);
@@ -210,7 +218,6 @@ export default function ServiceManager() {
           importantNotes: service.importantNotes || [],
           whatsIncluded: service.whatsIncluded || [],
           subCategoryId: service.subCategoryId || "",
-          cost: service.cost || "",
           duration: service.duration || "",
           graceTime: service.graceTime || "",
           bufferTime: service.bufferTime || "",
@@ -219,8 +226,9 @@ export default function ServiceManager() {
           imageUrls: service.imageUrls || [],
           mainImageUrl: service.mainImageUrl || "",
           relatedServices: service.relatedServices || [],
+          pricing: service.pricing || { sedan: { available: true, price: "" }, suv: { available: true, price: "" }, van: { available: true, price: "" } },
         }
-      : { name: "", description: "", importantNotes: [], whatsIncluded: [], categoryId: "", cost: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [] }
+      : { name: "", description: "", importantNotes: [], whatsIncluded: [], subCategoryId: "", duration: "", graceTime: "", bufferTime: "", active: true, availableSoon: false, imageUrls: [], mainImageUrl: "", relatedServices: [], pricing: { sedan: { available: true, price: "" }, suv: { available: true, price: "" }, van: { available: true, price: "" } } }
     );
     setImageFiles([]);
     setImagePreviews(service && service.imageUrls ? service.imageUrls : []);
@@ -266,7 +274,9 @@ export default function ServiceManager() {
       const category = subCategories.find(c => c.id === value);
       return category ? category.name : "Not Assigned";
     }},
-    { Header: "Cost", accessor: "cost" },
+    { Header: "Sedan Price", accessor: "pricing.sedan.price", Cell: ({ row }) => row.original.pricing?.sedan?.available ? row.original.pricing?.sedan?.price : "N/A" },
+    { Header: "SUV Price", accessor: "pricing.suv.price", Cell: ({ row }) => row.original.pricing?.suv?.available ? row.original.pricing?.suv?.price : "N/A" },
+    { Header: "Van Price", accessor: "pricing.van.price", Cell: ({ row }) => row.original.pricing?.van?.available ? row.original.pricing?.van?.price : "N/A" },
     { Header: "Duration (min)", accessor: "duration" },
     { Header: "Active", accessor: "active", Cell: ({ value }) => value ? "Yes" : "No" },
     {
@@ -295,11 +305,13 @@ export default function ServiceManager() {
     const q = search.toLowerCase();
     return services.filter(s =>
       (s.name && s.name.toLowerCase().includes(q)) ||
-      (s.cost && String(s.cost).includes(q)) ||
+      (s.pricing?.sedan?.price && String(s.pricing.sedan.price).includes(q)) ||
+      (s.pricing?.suv?.price && String(s.pricing.suv.price).includes(q)) ||
+      (s.pricing?.van?.price && String(s.pricing.van.price).includes(q)) ||
       (s.duration && String(s.duration).includes(q)) ||
       (s.subCategoryId && subCategories.find(c => c.id === s.subCategoryId)?.name?.toLowerCase().includes(q))
     );
-  }, [search, services]);
+  }, [search, services, subCategories]);
 
   const { 
     getTableProps,
@@ -496,9 +508,26 @@ export default function ServiceManager() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl mb={3} isRequired>
-                    <FormLabel>Cost</FormLabel>
-                    <Input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} min={0} />
+                  <FormControl>
+                    <FormLabel>Sedan</FormLabel>
+                    <HStack>
+                      <Switch isChecked={form.pricing.sedan.available} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, sedan: { ...f.pricing.sedan, available: e.target.checked } } }))} />
+                      <Input isDisabled={!form.pricing.sedan.available} type="number" value={form.pricing.sedan.price} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, sedan: { ...f.pricing.sedan, price: e.target.value } } }))} min={0} />
+                    </HStack>
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>SUV</FormLabel>
+                    <HStack>
+                      <Switch isChecked={form.pricing.suv.available} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, suv: { ...f.pricing.suv, available: e.target.checked } } }))} />
+                      <Input isDisabled={!form.pricing.suv.available} type="number" value={form.pricing.suv.price} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, suv: { ...f.pricing.suv, price: e.target.value } } }))} min={0} />
+                    </HStack>
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Van</FormLabel>
+                    <HStack>
+                      <Switch isChecked={form.pricing.van.available} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, van: { ...f.pricing.van, available: e.target.checked } } }))} />
+                      <Input isDisabled={!form.pricing.van.available} type="number" value={form.pricing.van.price} onChange={e => setForm(f => ({ ...f, pricing: { ...f.pricing, van: { ...f.pricing.van, price: e.target.value } } }))} min={0} />
+                    </HStack>
                   </FormControl>
                   <FormControl mb={3} isRequired>
                     <FormLabel>Duration (minutes)</FormLabel>
