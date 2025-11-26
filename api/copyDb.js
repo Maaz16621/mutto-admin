@@ -47,7 +47,7 @@ async function copyDatabase() {
 }
 
 // API endpoint
-router.post('/copy-db', async (req, res) => {
+router.get('/copy-db', async (req, res) => {
   try {
     const result = await copyDatabase();
     res.json({
