@@ -18,22 +18,35 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: serviceId, dateString, or selectedAddress.');
     }
 
-    console.log('getAvailableTimeSlots called with:', { serviceId, dateString, selectedAddress, totalVehiclesCount });
+    console.log('getAvailableTimeSlots called with:', { serviceId, dateString, selectedAddress, totalVehiclesCount, addons });
 
     const userId = context.auth ? context.auth.uid : null; // Get current user ID if authenticated
 
     try {
-        // Fetch all necessary data from Firestore
+        // Fetch settings, service, and workers
         const settingsRef = admin.firestore().collection('settings').doc('appSettings');
         const serviceRef = admin.firestore().collection('services').doc(serviceId);
         const workersCollection = admin.firestore().collection('workers').where('assignedServices', 'array-contains', serviceId);
 
-        const [settingsSnap, serviceSnap, workerSnap, addonSnaps] = await Promise.all([
+        const [settingsSnap, serviceSnap, workerSnap] = await Promise.all([
             settingsRef.get(),
             serviceRef.get(),
             workersCollection.get(),
-            addons && addons.length > 0 ? admin.firestore().collection('products').where(admin.firestore.FieldPath.documentId(), 'in', addons).get() : Promise.resolve(null)
         ]);
+
+        // Fetch data for the unique addons passed from the client
+        const uniqueAddonIds = [...new Set(addons)];
+        const addonSnaps = uniqueAddonIds.length > 0
+            ? await admin.firestore().collection('products').where(admin.firestore.FieldPath.documentId(), 'in', uniqueAddonIds).get()
+            : null;
+
+        // Create a map of the fetched addon data for quick lookup
+        const addonsDataMap = new Map();
+        if (addonSnaps) {
+            addonSnaps.docs.forEach(doc => {
+                addonsDataMap.set(doc.id, doc.data());
+            });
+        }
 
         if (!settingsSnap.exists) {
             throw new functions.https.HttpsError('not-found', 'App settings not found.');
@@ -47,7 +60,6 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const workers = workerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // **** START: Serviceability Check ****
-        // Filter workers to find who can service the selected address.
         const serviceableWorkers = workers.filter(worker => {
             if (Array.isArray(worker.serviceArea) && worker.serviceArea.length > 0 && selectedAddress && typeof selectedAddress.latitude === 'number' && typeof selectedAddress.longitude === 'number') {
                 const customerLat = selectedAddress.latitude;
@@ -82,7 +94,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
                 });
                 return isCustomerInAnyServiceArea;
             }
-            return false; // Worker has no service area defined or it's invalid.
+            return false;
         });
 
         const isLocationServiceable = serviceableWorkers.length > 0;
@@ -102,12 +114,17 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const effectiveVehiclesCount = totalVehiclesCount && totalVehiclesCount > 0 ? totalVehiclesCount : 1;
         let totalServiceDuration = baseServiceDuration * effectiveVehiclesCount;
 
-        if (addonSnaps && addonSnaps.docs.length > 0) {
-            const sumAddonTimes = addonSnaps.docs.reduce((sum, snap) => sum + (snap.data()?.time || 0), 0);
-            totalServiceDuration += sumAddonTimes;
+        // Correctly calculate addon duration by iterating through the provided addon IDs (with duplicates)
+        let sumAddonTimes = 0;
+        if (addons && addons.length > 0) {
+            sumAddonTimes = addons.reduce((sum, addonId) => {
+                const addonData = addonsDataMap.get(addonId);
+                return sum + (addonData?.time || 0);
+            }, 0);
         }
+        totalServiceDuration += sumAddonTimes;
 
-        console.log(`Found ${serviceableWorkers.length} serviceable workers.`);
+        console.log(`Found ${serviceableWorkers.length} serviceable workers. Total calculated duration: ${totalServiceDuration} mins.`);
 
         const [year, month, day] = dateString.split('-').map(Number);
         const selectedDateObj = new Date(year, month - 1, day);
@@ -150,9 +167,8 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
 
         // Add active reservations to bookingsByWorker, treating them as busy slots
         existingReservations.forEach(reservation => {
-            // Only consider reservations by *other* users as unavailable
             if (userId && reservation.userId === userId) {
-                return; // Current user's own reservation should still appear available to them
+                return;
             }
 
             if (!bookingsByWorker[reservation.workerId]) {
@@ -163,8 +179,8 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
             const reservationStart = dayjs(`${dateString} ${reservationStartStr}`, 'YYYY-MM-DD hh:mm A');
             const reservationEnd = dayjs(`${dateString} ${reservationEndStr}`, 'YYYY-MM-DD hh:mm A');
 
-            const serviceBufferTime = serviceData.bufferTime || 0; // Assuming same buffer for reservations
-            const drivingTime = 0; // Reservations don't have driving time yet
+            const serviceBufferTime = serviceData.bufferTime || 0;
+            const drivingTime = 0;
 
             const busyStart = reservationStart.subtract(drivingTime, 'minute');
             const busyEnd = reservationEnd.add(serviceBufferTime, 'minute');
@@ -177,7 +193,6 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
 
         const slotsMap = new Map();
 
-        // Now iterate over only the serviceable workers
         serviceableWorkers.forEach(worker => {
             console.log(`Processing serviceable worker ${worker.id}`);
 
@@ -228,21 +243,18 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
                     const now = dayjs().tz(UAE_TIMEZONE);
                     const workerStartToday = dayjs.tz(`${dateString} ${workerStartTime}`, UAE_TIMEZONE);
                     if (workerStartToday.isBefore(now)) {
-                        // Calculate the next valid slot time that is after 'now'
                         let nextValidSlotTime = now.add(workerInterval - (now.minute() % workerInterval), 'minute');
-                        // Ensure the next valid slot is not before the current time, and align it to the interval
                         if (now.minute() % workerInterval !== 0) {
                             nextValidSlotTime = now.startOf('minute').add(workerInterval - (now.minute() % workerInterval), 'minute');
                         } else {
                             nextValidSlotTime = now.startOf('minute');
                         }
 
-                        // If the calculated nextValidSlotTime is still before 'now', advance it by one interval
                         if (nextValidSlotTime.isBefore(now)) {
                             nextValidSlotTime = nextValidSlotTime.add(workerInterval, 'minute');
                         }
 
-                        const workerEndToday = dayjs().tz(UAE_TIMEZONE).endOf('day'); // Ensure it doesn't go past end of day
+                        const workerEndToday = dayjs().tz(UAE_TIMEZONE).endOf('day');
                         if (nextValidSlotTime.isAfter(workerEndToday)) {
                             return;
                         }
@@ -266,7 +278,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
                     });
 
                     if (isBookedOrReserved) {
-                        return; // This slot is booked or reserved for this worker, so skip it.
+                        return;
                     }
 
                     const existingWorkers = slotsMap.get(slot) || [];
@@ -296,7 +308,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         return {
             availableTimeSlots: sortedSlots,
             timeSlotsToWorkersMap: timeSlotsToWorkersMapObject,
-            isServiceable: true, // Location is serviceable
+            isServiceable: true,
         };
 
     } catch (error) {
