@@ -1,5 +1,6 @@
 // copyDb.js
 const express = require('express');
+const { db, dohaDb } = require('./firebaseAdmin');
 
 
 const router = express.Router();
