@@ -1,12 +1,8 @@
 // copyDb.js
 const express = require('express');
-const { db } = require('./firebaseAdmin'); // default DB
-const admin = require('firebase-admin');
+
 
 const router = express.Router();
-
-// Initialize Doha DB using the same app
-const dohaDb = admin.firestore(admin.app(), { databaseId: 'doha-db' });
 
 
 async function copyCollection(collectionName) {
