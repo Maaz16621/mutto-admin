@@ -11,7 +11,7 @@ async function copyCollection(collectionName) {
   if (snapshot.empty) return 0;
 
   const batchSize = 500;
-  let batch = dohaDb.batch();
+  let batch = db.batch();
   let counter = 0;
 
   for (const doc of snapshot.docs) {
@@ -21,7 +21,7 @@ async function copyCollection(collectionName) {
 
     if (counter % batchSize === 0) {
       await batch.commit();
-      batch = dohaDb.batch();
+      batch = db.batch();
     }
   }
 
