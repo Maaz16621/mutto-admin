@@ -1,5 +1,5 @@
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { admin, db } = require('../firebaseAdmin');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
@@ -24,9 +24,9 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
 
     try {
         // Fetch settings, service, and workers
-        const settingsRef = admin.firestore().collection('settings').doc('appSettings');
-        const serviceRef = admin.firestore().collection('services').doc(serviceId);
-        const workersCollection = admin.firestore().collection('workers').where('assignedServices', 'array-contains', serviceId);
+        const settingsRef = db.collection('settings').doc('appSettings');
+        const serviceRef = db.collection('services').doc(serviceId);
+        const workersCollection = db.collection('workers').where('assignedServices', 'array-contains', serviceId);
 
         const [settingsSnap, serviceSnap, workerSnap] = await Promise.all([
             settingsRef.get(),
@@ -37,7 +37,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         // Fetch data for the unique addons passed from the client
         const uniqueAddonIds = [...new Set(addons)];
         const addonSnaps = uniqueAddonIds.length > 0
-            ? await admin.firestore().collection('products').where(admin.firestore.FieldPath.documentId(), 'in', uniqueAddonIds).get()
+            ? await db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', uniqueAddonIds).get()
             : null;
 
         // Create a map of the fetched addon data for quick lookup
@@ -131,7 +131,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const dayOfWeek = selectedDateObj.getDay();
 
         // Fetch existing confirmed bookings for the selected date for serviceable workers
-        const bookingsQuery = admin.firestore().collection('bookings')
+        const bookingsQuery = db.collection('bookings')
             .where('selectedDate', '==', dateString)
             .where('status', '==', 'confirmed')
             .where('workerId', 'in', serviceableWorkers.map(w => w.id));
@@ -139,7 +139,7 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const existingBookings = bookingsSnapshot.docs.map(doc => doc.data());
 
         // Fetch existing active reservations for the selected date for serviceable workers
-        const reservationsQuery = admin.firestore().collection('reservations')
+        const reservationsQuery = db.collection('reservations')
             .where('selectedDate', '==', dateString)
             .where('workerId', 'in', serviceableWorkers.map(w => w.id))
             .where('expirationTime', '>', new Date()); // Only active reservations

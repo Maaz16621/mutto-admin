@@ -1,6 +1,6 @@
 
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { admin, db } = require('../firebaseAdmin');
 
 exports.handleBookingNotification = functions.firestore
   .document('bookings/{bookingId}')
@@ -16,9 +16,9 @@ exports.handleBookingNotification = functions.firestore
     // Case 1: User books a service (New booking)
     if (!beforeData && afterData) {
       // Notify all relevant staff
-      const staffSnapshot = await admin.firestore().collection('staff').where('permissions', 'array-contains', 'bookings').get();
+      const staffSnapshot = await db.collection('staff').where('permissions', 'array-contains', 'bookings').get();
       staffSnapshot.forEach(doc => {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'New Booking',
           body: `A new booking #${bookingId} has been created.`,
           userId: doc.id,
@@ -30,7 +30,7 @@ exports.handleBookingNotification = functions.firestore
 
       // If a worker is already assigned at creation, notify them immediately.
       if (afterData.workerId) {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'New Assignment',
           body: `You have been assigned to a new booking #${bookingId}.`,
           userId: afterData.workerId,
@@ -43,7 +43,7 @@ exports.handleBookingNotification = functions.firestore
 
     // Case 2: Admin assigns worker
     if (beforeData && afterData && beforeData.workerId !== afterData.workerId) {
-      admin.firestore().collection('notifications').add({
+      db.collection('notifications').add({
         title: 'New Assignment',
         body: `You have been assigned to booking #${bookingId}.`,
         userId: afterData.workerId,
@@ -52,7 +52,7 @@ exports.handleBookingNotification = functions.firestore
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      admin.firestore().collection('notifications').add({
+      db.collection('notifications').add({
         title: 'Worker Assigned',
         body: `A worker has been assigned to your booking #${bookingId}.`,
         userId: afterData.userId,
@@ -68,7 +68,7 @@ exports.handleBookingNotification = functions.firestore
       if (afterData.status === 'on its way') {
         notificationBody = 'Your worker is on its way.';
       }
-      admin.firestore().collection('notifications').add({
+      db.collection('notifications').add({
         title: 'Booking Status Updated',
         body: notificationBody,
         userId: afterData.userId,
@@ -77,9 +77,9 @@ exports.handleBookingNotification = functions.firestore
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const staffSnapshot = await admin.firestore().collection('staff').where('permissions', 'array-contains', 'bookings').get();
+      const staffSnapshot = await db.collection('staff').where('permissions', 'array-contains', 'bookings').get();
       staffSnapshot.forEach(doc => {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'Booking Status Updated',
           body: `The status of booking #${bookingId} has been updated to ${afterData.status}.`,
           userId: doc.id,
@@ -92,7 +92,7 @@ exports.handleBookingNotification = functions.firestore
 
     // Case 4: Booking details changed
     if (beforeData && afterData && (JSON.stringify(beforeData) !== JSON.stringify(afterData) && beforeData.workerId === afterData.workerId && beforeData.status === afterData.status)) {
-      admin.firestore().collection('notifications').add({
+      db.collection('notifications').add({
         title: 'Booking Details Changed',
         body: `The details of your booking #${bookingId} have been updated.`,
         userId: afterData.userId,
@@ -102,7 +102,7 @@ exports.handleBookingNotification = functions.firestore
       });
 
       if (afterData.workerId) {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'Booking Details Changed',
           body: `The details of booking #${bookingId} have been updated.`,
           userId: afterData.workerId,
@@ -115,9 +115,9 @@ exports.handleBookingNotification = functions.firestore
 
     // Case 6: Booking cancelled by User
     if (beforeData && afterData && afterData.status === 'cancelled' && beforeData.status !== 'cancelled' && afterData.cancelledBy === 'user') {
-      const staffSnapshot = await admin.firestore().collection('staff').where('permissions', 'array-contains', 'bookings').get();
+      const staffSnapshot = await db.collection('staff').where('permissions', 'array-contains', 'bookings').get();
       staffSnapshot.forEach(doc => {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'Booking Cancelled',
           body: `Booking #${bookingId} has been cancelled by the user.`,
           userId: doc.id,
@@ -128,7 +128,7 @@ exports.handleBookingNotification = functions.firestore
       });
 
       if (afterData.workerId) {
-        admin.firestore().collection('notifications').add({
+        db.collection('notifications').add({
           title: 'Booking Cancelled',
           body: `Booking #${bookingId} has been cancelled by the user.`,
           userId: afterData.workerId,
@@ -141,7 +141,7 @@ exports.handleBookingNotification = functions.firestore
 
     // Case 7: Booking cancelled by Worker/Admin
     if (beforeData && afterData && afterData.status === 'cancelled' && beforeData.status !== 'cancelled' && (afterData.cancelledBy === 'worker' || afterData.cancelledBy === 'admin')) {
-      admin.firestore().collection('notifications').add({
+      db.collection('notifications').add({
         title: 'Booking Cancelled',
         body: `Your booking #${bookingId} has been cancelled.`,
         userId: afterData.userId,

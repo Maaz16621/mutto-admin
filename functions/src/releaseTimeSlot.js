@@ -1,5 +1,5 @@
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { db } = require('../firebaseAdmin');
 
 exports.releaseTimeSlot = functions.https.onCall(async (data, context) => {
  
@@ -10,7 +10,7 @@ exports.releaseTimeSlot = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        const reservationsRef = admin.firestore().collection('reservations');
+        const reservationsRef = db.collection('reservations');
         const querySnapshot = await reservationsRef
             .where('workerId', '==', workerId)
             .where('selectedDate', '==', selectedDate)

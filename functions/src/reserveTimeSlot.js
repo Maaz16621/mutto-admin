@@ -1,10 +1,6 @@
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { admin, db } = require('../firebaseAdmin');
 const dayjs = require('dayjs');
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
 
 exports.reserveTimeSlot = functions
   .runWith({ timeoutSeconds: 60, memory: '1GB' })
@@ -16,7 +12,6 @@ exports.reserveTimeSlot = functions
     }
 
     const expirationTime = dayjs().add(10, 'minute').toDate();
-    const db = admin.firestore();
     const reservationsRef = db.collection('reservations');
     const bookingsRef = db.collection('bookings');
 

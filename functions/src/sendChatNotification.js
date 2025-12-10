@@ -1,6 +1,6 @@
 
 const { firestore } = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { db } = require('../firebaseAdmin');
 
 exports.sendChatNotification = firestore
   .document('chats/{chatId}/messages/{messageId}')
@@ -37,11 +37,11 @@ exports.sendChatNotification = firestore
 
     // Function to get a user's document from either 'users' or 'workers' collection
     const getUserDoc = async (userId) => {
-      let userDoc = await admin.firestore().collection('users').doc(userId).get();
+      let userDoc = await db.collection('users').doc(userId).get();
       if (userDoc.exists) {
         return { doc: userDoc, type: 'user' };
       }
-      userDoc = await admin.firestore().collection('workers').doc(userId).get();
+      userDoc = await db.collection('workers').doc(userId).get();
       if (userDoc.exists) {
         return { doc: userDoc, type: 'worker' };
       }

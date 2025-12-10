@@ -1,6 +1,6 @@
 
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { db } = require('../firebaseAdmin');
 const { sendNotification } = require('../utils/helpers');
 
 exports.sendPushOnNewNotification = functions.firestore
@@ -25,7 +25,7 @@ exports.sendPushOnNewNotification = functions.firestore
         return null;
       }
 
-      const doc = await admin.firestore().collection(collectionName).doc(userId).get();
+      const doc = await db.collection(collectionName).doc(userId).get();
       if (doc.exists) {
         const data = doc.data();
         let tokens = [];
@@ -60,8 +60,8 @@ exports.sendPushOnNewNotification = functions.firestore
       // This handles notifications created by the Notification Manager that are
       // intended for a broad audience.
       console.log('Recipient type is not users or workers. Sending to all users and workers.');
-      const usersSnapshot = await admin.firestore().collection('users').get();
-      const workersSnapshot = await admin.firestore().collection('workers').get();
+      const usersSnapshot = await db.collection('users').get();
+      const workersSnapshot = await db.collection('workers').get();
 
       const allTokens = [];
       const allUserIds = [];
@@ -95,8 +95,7 @@ exports.sendPushOnNewNotification = functions.firestore
     }
 
     try {
-      const firestore = admin.firestore();
-      const recipientsSnapshot = await firestore.collection(collectionName).get();
+      const recipientsSnapshot = await db.collection(collectionName).get();
 
       if (recipientsSnapshot.empty) {
         console.log(`No recipients found in ${collectionName} collection.`);

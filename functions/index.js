@@ -1,6 +1,5 @@
 
-const admin = require('firebase-admin');
-admin.initializeApp();
+require('./firebaseAdmin');
 
 const { createStripeCustomer } = require('./src/createStripeCustomer');
 const { createSetupIntent } = require('./src/createSetupIntent');

@@ -1,6 +1,6 @@
 
 const functions = require('firebase-functions/v1');
-const admin = require('firebase-admin');
+const { db } = require('../firebaseAdmin');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
@@ -13,7 +13,7 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
   const nowUAE = dayjs().tz('Asia/Dubai');
 
   try {
-    const bookingsSnapshot = await admin.firestore().collection('bookings')
+    const bookingsSnapshot = await db.collection('bookings')
       .where('status', '==', 'confirmed')
       .get();
 
@@ -36,11 +36,11 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
         if (nowUAE.isAfter(userReminderTimeUAE) && nowUAE.isBefore(bookingDateTimeUAE)) {
           const userId = booking.userId;
           if (userId) {
-            const userDoc = await admin.firestore().collection('users').doc(userId).get();
+            const userDoc = await db.collection('users').doc(userId).get();
             if (userDoc.exists && userDoc.data().pushTokens && userDoc.data().pushTokens.length > 0) {
               let serviceName = 'your booked service';
               if (booking.serviceId) {
-                const serviceDoc = await admin.firestore().collection('services').doc(booking.serviceId).get();
+                const serviceDoc = await db.collection('services').doc(booking.serviceId).get();
                 if (serviceDoc.exists) {
                   serviceName = serviceDoc.data().name || serviceName;
                 }
@@ -60,7 +60,7 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
       if (isBookingToday && !booking.workerReminderSent) {
         const workerId = booking.workerId;
         if (workerId) {
-          const workerDoc = await admin.firestore().collection('workers').doc(workerId).get();
+          const workerDoc = await db.collection('workers').doc(workerId).get();
           if (workerDoc.exists) {
             const workerData = workerDoc.data();
             const drivingTime = workerData.drivingTime || 0; // Default to 0 if not set
@@ -71,7 +71,7 @@ exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').
               if (workerData.expoPushToken) {
                 let serviceName = 'a service';
                 if (booking.serviceId) {
-                  const serviceDoc = await admin.firestore().collection('services').doc(booking.serviceId).get();
+                  const serviceDoc = await db.collection('services').doc(booking.serviceId).get();
                   if (serviceDoc.exists) {
                     serviceName = serviceDoc.data().name || serviceName;
                   }

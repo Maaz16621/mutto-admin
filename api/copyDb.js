@@ -7,7 +7,7 @@ const router = express.Router();
 
 
 async function copyCollection(collectionName) {
-  const snapshot = await db.collection(collectionName).get();
+  const snapshot = await dohaDb.collection(collectionName).get();
   if (snapshot.empty) return 0;
 
   const batchSize = 500;
@@ -15,7 +15,7 @@ async function copyCollection(collectionName) {
   let counter = 0;
 
   for (const doc of snapshot.docs) {
-    const docRef = dohaDb.collection(collectionName).doc(doc.id);
+    const docRef = db.collection(collectionName).doc(doc.id);
     batch.set(docRef, doc.data());
     counter++;
 
@@ -33,7 +33,7 @@ async function copyCollection(collectionName) {
 }
 
 async function copyDatabase() {
-  const collections = await db.listCollections();
+  const collections = await dohaDb.listCollections();
   const results = [];
 
   for (const col of collections) {
@@ -50,7 +50,7 @@ router.get('/copy-db', async (req, res) => {
     const result = await copyDatabase();
     res.json({
       success: true,
-      message: 'Database copy to doha-db complete!',
+      message: 'Database copy from doha-db to main db complete!',
       details: result
     });
   } catch (error) {

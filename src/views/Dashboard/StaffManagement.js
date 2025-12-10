@@ -433,6 +433,7 @@ export default function StaffManagement() {
                 <FormLabel>Permissions</FormLabel>
                 <VStack align="start">
                   <Checkbox isChecked={form.permissions.includes("dashboard")} onChange={e => handlePermissionChange("dashboard", e.target.checked)}>Dashboard</Checkbox>
+                  <Checkbox isChecked={form.permissions.includes("bookings")} onChange={e => handlePermissionChange("bookings", e.target.checked)}>Bookings</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("staff-management")} onChange={e => handlePermissionChange("staff-management", e.target.checked)}>Staff Management</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("category-manager")} onChange={e => handlePermissionChange("category-manager", e.target.checked)}>Category Manager</Checkbox>
                   <Checkbox isChecked={form.permissions.includes("service-manager")} onChange={e => handlePermissionChange("service-manager", e.target.checked)}>Service Manager</Checkbox>
