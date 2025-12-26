@@ -1,21 +1,161 @@
-bookingId
-"vWhX34DBgMCEJTTaTidX"
+addons
+(map)
+
+
+
+2hlfVlNSps9yGtQ3Yz1D
+(array)
+
+
+
+0
+(map)
+
+
+(array)
+
+
+availableSedan
+true
+(boolean)
+
+
+availableSuv
+true
+(boolean)
+
+
+availableVan
+true
+(boolean)
+
+
+categoryId
+"xdedoHlLwYcUizGINKDE"
+(string)
+
+
+cost
+7
+(number)
+
+
+
+createdAt
+(map)
+
+
+nanoseconds
+696000000
+(number)
+
+
+seconds
+1766300684
+(number)
+
+
+type
+"firestore/timestamp/1.0"
+(string)
+
+
+description
+"After applying soap , use hand to rub soap."
+(string)
+
+
+id
+"GzlDntWP9lrdSjb5Cjww"
+(string)
+
+
+imageUrl
+"https://firebasestorage.googleapis.com/v0/b/mutto-84d97.firebasestorage.app/o/product-images/1766300678971_49hupf0fy.jpeg?alt=media&token=65e9592d-b87b-4ca6-9488-ab9053da10c6"
+(string)
+
+
+name
+"Soap the car with hand"
+(string)
+
+
+subCategoryId
+"xd9wnebEUUgxLxyK3i8m"
+(string)
+
+
+time
+7
+(number)
+
+
+
+updatedAt
+(map)
+
+
+nanoseconds
+696000000
+(number)
+
+
+seconds
+1766300684
+(number)
+
+
+type
+"firestore/timestamp/1.0"
 (string)
 
 
 createdAt
-October 5, 2025 at 5:40:27 PM UTC+5
+December 21, 2025 at 3:13:04 PM UTC+5
 (timestamp)
 
 
-feedbackText
-""
+customerName
+"Saad "
 (string)
 
 
-jobRating
-5
-(number)
+email
+"Saad@autobutler.no"
+(string)
+
+
+mainCategoryName
+"Car Wash"
+(string)
+
+
+paymentMethod
+"cash"
+(string)
+
+
+phone
+"+971585073998"
+(string)
+
+
+reminderSent
+true
+(boolean)
+
+
+(map)
+
+
+selectedDate
+"2025-12-21"
+(string)
+
+
+selectedTime
+"03:00 PM to 03:37 PM"
+(string)
 
 
 serviceId
@@ -23,18 +163,28 @@ serviceId
 (string)
 
 
-
-tags
-(array)
-
-
-0
-"Professional"
+serviceMainImageUrl
+"https://firebasestorage.googleapis.com/v0/b/mutto-84d97.firebasestorage.app/o/service-images%2F1756062766644_2wandhda2.png?alt=media&token=d1a69629-79d8-4b7e-a545-a67253a978b7"
 (string)
 
 
-1
-"Excellent Service"
+serviceName
+"Pressure Car Wash"
+(string)
+
+
+status
+"confirmed"
+(string)
+
+
+subCategoryName
+"Exterior"
+(string)
+
+
+totalAmount
+"52"
 (string)
 
 
@@ -43,20 +193,95 @@ userId
 (string)
 
 
-userImage
-"https://firebasestorage.googleapis.com/v0/b/mutto-84d97.firebasestorage.app/o/profile_images%2FUc4A6a1VQRWTa4Jep928CNQYPkp2?alt=media&token=a92b586c-eff1-441e-bef9-f6305dc0e454"
+userReminderSent
+true
+(boolean)
+
+
+
+vehicles
+(array)
+
+
+
+0
+(map)
+
+
+color
+"Black"
 (string)
 
 
-userName
-"Saad "
+company
+"Toyota"
+(string)
+
+
+
+createdAt
+(map)
+
+
+nanoseconds
+766000000
+(number)
+
+
+seconds
+1756554944
+(number)
+
+
+type
+"firestore/timestamp/1.0"
+(string)
+
+
+id
+"2hlfVlNSps9yGtQ3Yz1D"
+(string)
+
+
+model
+"Land Cruiser"
+(string)
+
+
+modelYear
+"2024"
+(string)
+
+
+plateNumberPart1
+"Cc"
+(string)
+
+
+plateNumberPart2
+"3371"
+(string)
+
+
+servicePrice
+45
+(number)
+
+
+userId
+"Uc4A6a1VQRWTa4Jep928CNQYPkp2"
+(string)
+
+
+vehicleType
+"SUV"
 (string)
 
 
 workerId
-"Vni4byaqNYQKpeczehTBv6c0abt1"
+"0Q57iGRajyVwVGwGWuS5RbFtbhJ3"
 (string)
 
 
-workerRating
-5
+workerName
+"Amer"

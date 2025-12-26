@@ -1,6 +1,29 @@
 
 const functions = require('firebase-functions/v1');
 const { admin, db } = require('../firebaseAdmin');
+const axios = require('axios');
+
+async function triggerAnalyticsAPI(bookingId, bookingData) {
+  try {
+    await axios.post(
+      'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app/api/analytics/booking-completed',
+      {
+        bookingId,
+        amount: bookingData.amount || 0,
+        userId: bookingData.userId,
+        currency: 'PKR'
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.INTERNAL_API_KEY}`
+        },
+        timeout: 5000
+      }
+    );
+  } catch (err) {
+    console.error('Analytics trigger failed:', err.message);
+  }
+}
 
 exports.handleBookingNotification = functions.firestore
   .document('bookings/{bookingId}')
@@ -112,6 +135,32 @@ exports.handleBookingNotification = functions.firestore
         });
       }
     }
+
+    // 🔥 ANALYTICS TRIGGER — BOOKING COMPLETED
+if (
+  beforeData &&
+  afterData &&
+  beforeData.status !== 'completed' &&
+  afterData.status === 'completed' &&
+  !afterData.analyticsTracked
+) {
+   db.collection('notifications').add({
+        title: 'Booking Completed',
+        body: `Your booking #${bookingId} has been completed.`,
+        userId: afterData.userId,
+        userType: 'user',
+        data: { bookingId },
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+  await triggerAnalyticsAPI(bookingId, afterData);
+
+  // Prevent duplicate firing
+  await db.collection('bookings').doc(bookingId).update({
+    analyticsTracked: true
+  });
+}
+
 
     // Case 6: Booking cancelled by User
     if (beforeData && afterData && afterData.status === 'cancelled' && beforeData.status !== 'cancelled' && afterData.cancelledBy === 'user') {

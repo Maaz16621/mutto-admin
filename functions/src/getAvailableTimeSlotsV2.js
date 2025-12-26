@@ -192,100 +192,154 @@ exports.getAvailableTimeSlotsV2 = functions.runWith({ memory: '1GB' }).https.onC
         const currentDayName = dayNames[dayOfWeek];
 
         const slotsMap = new Map();
+        const step = 15; // Use a 15-minute step to generate potential start times
+
+        // Determine the overall time range to check for slots across all serviceable workers
+        let earliestStartTime = '23:59';
+        let latestEndTime = '00:00';
 
         serviceableWorkers.forEach(worker => {
-            console.log(`Processing serviceable worker ${worker.id}`);
-
-            if (worker.enabled === false) {
-                console.log(`Worker ${worker.id} skipped: disabled.`);
-                return;
-            }
-
-            if (worker.offDates && Array.isArray(worker.offDates) && worker.offDates.includes(dateString)) {
-                console.log(`Worker ${worker.id} skipped: off date on ${dateString}.`);
+            if (worker.enabled === false || 
+                (worker.offDates && worker.offDates.includes(dateString)) || 
+                worker.status === 'suspended' || 
+                worker.autoAccept === false) {
                 return;
             }
 
             let workerStartTime = '';
             let workerEndTime = '';
-            let workerInterval = serviceData.duration || 60;
 
             const workerSpecialHoursMap = worker.specialWorkingHours && Array.isArray(worker.specialWorkingHours) ?
-                worker.specialWorkingHours.reduce((acc, curr) => {
-                    if (curr.date) acc[curr.date] = curr;
-                    return acc;
-                }, {}) : {};
+                worker.specialWorkingHours.reduce((acc, curr) => { if (curr.date) acc[curr.date] = curr; return acc; }, {}) : {};
 
             if (workerSpecialHoursMap[dateString]) {
                 const specialHours = workerSpecialHoursMap[dateString];
                 workerStartTime = specialHours.start;
                 workerEndTime = specialHours.end;
-                workerInterval = specialHours.interval || workerInterval;
             } else if (worker.dailyWorkingHours && worker.dailyWorkingHours[currentDayName]) {
                 const dailyHours = worker.dailyWorkingHours[currentDayName];
                 if (dailyHours.enabled) {
                     workerStartTime = dailyHours.start;
                     workerEndTime = dailyHours.end;
-                    workerInterval = dailyHours.interval || workerInterval;
-                } else {
-                    console.log(`Worker ${worker.id} skipped: not working on ${currentDayName}.`);
-                    return;
                 }
-            } else {
-                console.log(`Worker ${worker.id} skipped: no working hours defined for ${currentDayName}.`);
+            }
+
+            if (workerStartTime && workerEndTime) {
+                if (workerStartTime < earliestStartTime) earliestStartTime = workerStartTime;
+                if (workerEndTime > latestEndTime) latestEndTime = workerEndTime;
+            }
+        });
+
+        if (earliestStartTime >= latestEndTime) {
+            console.log('No available working hours found for any serviceable worker.');
+            return { availableTimeSlots: [], timeSlotsToWorkersMap: {}, isServiceable: true };
+        }
+        
+        let effectiveOverallStartTime = earliestStartTime;
+        const today = dayjs().tz(UAE_TIMEZONE).format('YYYY-MM-DD');
+        if (dateString === today) {
+            const now = dayjs().tz(UAE_TIMEZONE);
+            const overallStartToday = dayjs.tz(`${dateString} ${earliestStartTime}`, UAE_TIMEZONE);
+            if (overallStartToday.isBefore(now)) {
+                // Round up to the next 15-minute increment
+                const minutes = now.minute();
+                const remainder = minutes % step;
+                let nextValidSlotTime = now.startOf('minute');
+                if (remainder !== 0) {
+                     nextValidSlotTime = now.add(step - remainder, 'minute');
+                }
+                
+                const overallEndToday = dayjs().tz(UAE_TIMEZONE).endOf('day');
+                if (nextValidSlotTime.isBefore(overallEndToday)) {
+                    effectiveOverallStartTime = nextValidSlotTime.format('HH:mm');
+                } else {
+                    console.log('Not enough time left today for any slots.');
+                    return { availableTimeSlots: [], timeSlotsToWorkersMap: {}, isServiceable: true };
+                }
+            }
+        }
+
+        const potentialStartTimes = [];
+        let currentTime = dayjs.tz(`${dateString} ${effectiveOverallStartTime}`, 'YYYY-MM-DD HH:mm', UAE_TIMEZONE);
+        const endTime = dayjs.tz(`${dateString} ${latestEndTime}`, 'YYYY-MM-DD HH:mm', UAE_TIMEZONE);
+
+        while (currentTime.isBefore(endTime)) {
+            potentialStartTimes.push(currentTime);
+            currentTime = currentTime.add(step, 'minutes');
+        }
+
+        potentialStartTimes.forEach(slotStart => {
+            const slotEnd = slotStart.add(totalServiceDuration, 'minute');
+            
+            // The slot should not go beyond the latest possible end time
+            if(slotEnd.isAfter(endTime)) {
                 return;
             }
 
-            if (workerStartTime && workerEndTime && workerInterval) {
-                let effectiveStartTime = workerStartTime;
-                const today = dayjs().tz(UAE_TIMEZONE).format('YYYY-MM-DD');
-                if (dateString === today) {
-                    const now = dayjs().tz(UAE_TIMEZONE);
-                    const workerStartToday = dayjs.tz(`${dateString} ${workerStartTime}`, UAE_TIMEZONE);
-                    if (workerStartToday.isBefore(now)) {
-                        let nextValidSlotTime = now.add(workerInterval - (now.minute() % workerInterval), 'minute');
-                        if (now.minute() % workerInterval !== 0) {
-                            nextValidSlotTime = now.startOf('minute').add(workerInterval - (now.minute() % workerInterval), 'minute');
-                        } else {
-                            nextValidSlotTime = now.startOf('minute');
-                        }
+            const slotString = `${slotStart.format('hh:mm A')} to ${slotEnd.format('hh:mm A')}`;
 
-                        if (nextValidSlotTime.isBefore(now)) {
-                            nextValidSlotTime = nextValidSlotTime.add(workerInterval, 'minute');
-                        }
+            // List of workers who can service this specific time slot
+            const availableWorkersForSlot = [];
 
-                        const workerEndToday = dayjs().tz(UAE_TIMEZONE).endOf('day');
-                        if (nextValidSlotTime.isAfter(workerEndToday)) {
-                            return;
-                        }
-                        effectiveStartTime = nextValidSlotTime.format('HH:mm');
-                    }
+            for (const worker of serviceableWorkers) {
+                if (worker.enabled === false) continue;
+                if (worker.offDates && Array.isArray(worker.offDates) && worker.offDates.includes(dateString)) continue;
+                if (worker.status === 'suspended' || worker.autoAccept === false) continue;
+
+                let workerStartTimeStr = '';
+                let workerEndTimeStr = '';
+                
+                const workerSpecialHoursMap = worker.specialWorkingHours?.reduce((acc, curr) => ({ ...acc, [curr.date]: curr }), {}) || {};
+
+                if (workerSpecialHoursMap[dateString]) {
+                    const specialHours = workerSpecialHoursMap[dateString];
+                    workerStartTimeStr = specialHours.start;
+                    workerEndTimeStr = specialHours.end;
+                } else if (worker.dailyWorkingHours && worker.dailyWorkingHours[currentDayName]?.enabled) {
+                    const dailyHours = worker.dailyWorkingHours[currentDayName];
+                    workerStartTimeStr = dailyHours.start;
+                    workerEndTimeStr = dailyHours.end;
+                } else {
+                    continue; // Worker not scheduled for this day
                 }
 
-                const slots = generateTimeSlots(dateString, effectiveStartTime, workerEndTime, totalServiceDuration, UAE_TIMEZONE);
-                slots.forEach(slot => {
-                    const serviceBufferTime = serviceData.bufferTime || 0;
-                    const slotStartStr = slot.split(' to ')[0];
-                    const slotEndStr = slot.split(' to ')[1];
-                    const slotStart = dayjs(`${dateString} ${slotStartStr}`, 'YYYY-MM-DD hh:mm A');
-                    const slotEnd = dayjs(`${dateString} ${slotEndStr}`, 'YYYY-MM-DD hh:mm A');
+                if (!workerStartTimeStr || !workerEndTimeStr) continue;
 
-                    const workerBusySlots = bookingsByWorker[worker.id] || [];
-                    const isBookedOrReserved = workerBusySlots.some(busySlot => {
-                        const newSlotBusyStart = slotStart.subtract(worker.drivingTime || 0, 'minute');
-                        const newSlotBusyEnd = slotEnd.add(serviceBufferTime, 'minute');
-                        return newSlotBusyStart.isBefore(busySlot.end) && newSlotBusyEnd.isAfter(busySlot.start);
-                    });
+                const workerStart = dayjs.tz(`${dateString} ${workerStartTimeStr}`, 'YYYY-MM-DD HH:mm', UAE_TIMEZONE);
+                const workerEnd = dayjs.tz(`${dateString} ${workerEndTimeStr}`, 'YYYY-MM-DD HH:mm', UAE_TIMEZONE);
 
-                    if (isBookedOrReserved) {
-                        return;
-                    }
+                if (slotStart.isBefore(workerStart) || slotEnd.isAfter(workerEnd)) {
+                    continue; // Slot is outside of worker's hours
+                }
+                
+                const today = dayjs().tz(UAE_TIMEZONE).format('YYYY-MM-DD');
+                if (dateString === today) {
+                  const now = dayjs().tz(UAE_TIMEZONE);
+                   if (slotStart.isBefore(now)) {
+                       continue; // Cannot book slots in the past
+                   }
+                }
 
-                    const existingWorkers = slotsMap.get(slot) || [];
-                    if (!existingWorkers.includes(worker.id)) {
-                        slotsMap.set(slot, [...existingWorkers, worker.id]);
-                    }
+
+                const workerBusySlots = bookingsByWorker[worker.id] || [];
+                const serviceBufferTime = serviceData.bufferTime || 0;
+                
+                const isBooked = workerBusySlots.some(busySlot => {
+                    const newSlotBusyStart = slotStart.subtract(worker.drivingTime || 0, 'minute');
+                    const newSlotBusyEnd = slotEnd.add(serviceBufferTime, 'minute');
+                    return newSlotBusyStart.isBefore(busySlot.end) && newSlotBusyEnd.isAfter(busySlot.start);
                 });
+
+                if (!isBooked) {
+                    availableWorkersForSlot.push(worker.id);
+                }
+            }
+
+            if (availableWorkersForSlot.length > 0) {
+                // Ensure we don't add workers who are already there (shouldn't happen with this logic, but as a safeguard)
+                const existingWorkers = slotsMap.get(slotString) || [];
+                const newWorkerSet = new Set([...existingWorkers, ...availableWorkersForSlot]);
+                slotsMap.set(slotString, Array.from(newWorkerSet));
             }
         });
 

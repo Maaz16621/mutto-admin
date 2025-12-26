@@ -7,6 +7,7 @@ const placeDetailsRoute = require('./placeDetails');
 const nominatimProxyRoute = require('./nominatimProxy');
 const googleToOsmRoute = require('./googleToOsm');
 const getServicesRoute = require('./getServices');
+const bookingCompleted = require('./analytics');
 const { runUpdate } = require('./updateVehicleType');
 
 
@@ -21,7 +22,7 @@ app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
 app.use('/api', getServicesRoute);
 app.use('/api', require('./copyDb'));
-
+app.use('/api', bookingCompleted );
 app.get('/api/updateVehicles', async (req, res) => {
     try {
       const result = await runUpdate();

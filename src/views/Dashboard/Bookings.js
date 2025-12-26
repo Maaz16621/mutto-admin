@@ -320,7 +320,7 @@ export default function Bookings() {
             const workerDocRef = doc(firestore, "workers", booking.workerId);
             const workerDoc = await getDoc(workerDocRef);
             workerDetails = workerDoc.data() || {};
-            workerName = workerDetails.fullName || workerName;
+            workerName = workerDetails.fullName || workerDetails.userName || workerName;
         }
 
         return {
@@ -450,10 +450,51 @@ export default function Bookings() {
     setLoading(false);
   };
 
-  const openView = useCallback((booking) => {
-    setViewBooking(booking);
+  const openView = useCallback(async (booking) => {
+    let detailedAddons = [];
+    let addonsByVehicle = null;
+
+    const addonsData = booking.addons;
+
+    if (typeof addonsData === 'object' && addonsData !== null && !Array.isArray(addonsData)) {
+        // --- NEW FORMAT ---
+        // The object contains vehicle IDs mapped to arrays of addon *objects*.
+        // The details are already here, no need to fetch.
+        addonsByVehicle = addonsData;
+        detailedAddons = Object.values(addonsData).flat();
+
+    } else if (Array.isArray(addonsData) && addonsData.length > 0) {
+        // --- OLD FORMATS ---
+        if (typeof addonsData[0] === 'string') {
+            // Array of addon IDs, so we need to fetch details.
+            try {
+                const addonDetailsPromises = addonsData.map(addonId => {
+                    if (typeof addonId === 'string' && addonId.trim() !== '') {
+                        return getDoc(doc(firestore, "products", addonId));
+                    }
+                    return null;
+                }).filter(Boolean);
+
+                const addonDocs = await Promise.all(addonDetailsPromises);
+                detailedAddons = addonDocs.filter(doc => doc && doc.exists()).map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) {
+                console.error("Error fetching addon details for old format:", error);
+                toast({ title: "Error fetching addon details", status: "error", description: error.message });
+                detailedAddons = []; // Reset on error
+            }
+        } else if (typeof addonsData[0] === 'object' && addonsData[0] !== null) {
+            // Array of addon objects, details are already here.
+            detailedAddons = addonsData;
+        }
+    }
+
+    setViewBooking({
+        ...booking,
+        detailedAddons: detailedAddons || [],
+        addonsByVehicle
+    });
     onViewOpen();
-  }, [onViewOpen]);
+  }, [onViewOpen, toast]);
 
   const columns = useMemo(() => [
     { Header: "Customer", accessor: "customerName" },
@@ -792,8 +833,21 @@ const availableServices = useMemo(() => {
           booking.workerDetails = workerDoc.data() || {};
         }
         // Fetch addon details if any
-        if (booking.addons && booking.addons.length > 0) {
-          const addonDetailsPromises = booking.addons.map(addonId => getDoc(doc(firestore, "products", addonId)));
+        const getAddonIds = (addons) => {
+            if (Array.isArray(addons)) {
+                return addons; // Old format
+            }
+            if (typeof addons === 'object' && addons !== null && Object.keys(addons).length > 0) {
+                // New format: { vehicleId: ["addon1", "addon2"], ... }
+                return Object.values(addons).flat();
+            }
+            return []; // No addons or unknown format
+        };
+
+        const addonIds = getAddonIds(booking.addons);
+
+        if (addonIds.length > 0) {
+          const addonDetailsPromises = addonIds.map(addonId => getDoc(doc(firestore, "products", addonId)));
           const addonDocs = await Promise.all(addonDetailsPromises);
           booking.addonDetails = addonDocs.map(doc => doc.data());
         }
@@ -878,7 +932,7 @@ const availableServices = useMemo(() => {
         booking.totalAmount || '',
         booking.tipAmount || '',
         booking.tipPaymentMethod || '',
-        booking.workerName || booking.workerDetails?.fullName || '',
+        booking.workerName || booking.workerDetails?.fullName || booking.workerDetails?.userName || '',
         booking.workerDetails?.email || '',
         booking.workerDetails?.phone || '',
         booking.selectedAddress?.name || '',
@@ -1033,13 +1087,31 @@ const availableServices = useMemo(() => {
                 <Heading size="md">User Details</Heading>
                 <Text>Name: {viewBooking.userDetails?.fullName || viewBooking.customerName}</Text>
                 <Text>Email: {viewBooking.userDetails?.email || viewBooking.email}</Text>
+                  <Text>Phone: {viewBooking.userDetails?.phone || viewBooking.phone}</Text>
 
                 <Heading size="md" mt={4}>Vehicle Details</Heading>
-                <Text>Company: {viewBooking.vehicle?.company}</Text>
-                <Text>Model: {viewBooking.vehicle?.model}</Text>
-                <Text>Year: {viewBooking.vehicle?.modelYear}</Text>
-                <Text>Color: {viewBooking.vehicle?.color}</Text>
-                <Text>Plate: {viewBooking.vehicle?.plateNumberPart1}-{viewBooking.vehicle?.plateNumberPart2}</Text>
+                {viewBooking.vehicles && Array.isArray(viewBooking.vehicles) && viewBooking.vehicles.length > 0 ? (
+                    viewBooking.vehicles.map((v, index) => (
+                        <Box key={index} mt={index > 0 ? 3 : 0} p={2} borderWidth="1px" borderRadius="md">
+                            <Text fontWeight="bold">Vehicle {index + 1}</Text>
+                            <Text>Company: {v.company}</Text>
+                            <Text>Model: {v.model}</Text>
+                            <Text>Year: {v.modelYear}</Text>
+                            <Text>Color: {v.color}</Text>
+                            <Text>Plate: {v.plateNumberPart1}-{v.plateNumberPart2}</Text>
+                        </Box>
+                    ))
+                ) : viewBooking.vehicle?.company ? (
+                    <Box>
+                        <Text>Company: {viewBooking.vehicle.company}</Text>
+                        <Text>Model: {viewBooking.vehicle.model}</Text>
+                        <Text>Year: {viewBooking.vehicle.modelYear}</Text>
+                        <Text>Color: {viewBooking.vehicle.color}</Text>
+                        <Text>Plate: {viewBooking.vehicle.plateNumberPart1}-{viewBooking.vehicle.plateNumberPart2}</Text>
+                    </Box>
+                ) : (
+                    <Text>No vehicle details available.</Text>
+                )}
 
                 <Heading size="md" mt={4}>Address Details</Heading>
                 <Text>Name: {viewBooking.selectedAddress?.name}</Text>
@@ -1050,7 +1122,7 @@ const availableServices = useMemo(() => {
                 <Text>Price: {viewBooking.serviceDetails?.cost}</Text>
 
                 <Heading size="md" mt={4}>Worker Details</Heading>
-                <Text>Name: {viewBooking.workerDetails?.fullName}</Text>
+                <Text>Name: {viewBooking.workerDetails?.fullName || viewBooking.workerDetails?.userName}</Text>
                 <Text>Email: {viewBooking.workerDetails?.email}</Text>
 
                 <Heading size="md" mt={4}>Booking Information</Heading>
@@ -1065,13 +1137,40 @@ const availableServices = useMemo(() => {
                   </>
                 )}
 
-                {viewBooking.addons && viewBooking.addons.length > 0 && (
+                {(viewBooking.detailedAddons && viewBooking.detailedAddons.length > 0) && (
                   <>
                     <Heading size="md" mt={4}>Addons</Heading>
-                    {viewBooking.addons.map((addon, index) => (
-                      <Text key={index}>{addon.name} - ${addon.price}</Text>
-                    ))}
+                    {viewBooking.addonsByVehicle ? (
+                        // New format: addons grouped by vehicle
+                        Object.keys(viewBooking.addonsByVehicle).map((vehicleId) => {
+                            const vehicle = (viewBooking.vehicles && Array.isArray(viewBooking.vehicles))
+                                ? viewBooking.vehicles.find(v => v.id === vehicleId)
+                                : (viewBooking.vehicle?.id === vehicleId ? viewBooking.vehicle : null);
+
+                            const addonsForVehicle = viewBooking.addonsByVehicle[vehicleId];
+                            
+                            if (addonsForVehicle && addonsForVehicle.length > 0) {
+                                return (
+                                    <Box key={vehicleId} mt={2} p={2} borderWidth="1px" borderRadius="md">
+                                        <Text fontWeight="bold">Vehicle: {vehicle?.company} {vehicle?.model} ({vehicle?.plateNumberPart1}-{vehicle?.plateNumberPart2})</Text>
+                                        {addonsForVehicle.map((addon, index) => (
+                                            <Text key={index}>{addon.name} - AED{addon.cost}</Text>
+                                        ))}
+                                    </Box>
+                                );
+                            }
+                            return null;
+                        })
+                    ) : (
+                        // Old format: flat list of addons
+                        viewBooking.detailedAddons.map((addon, index) => (
+                            <Text key={index}>- {addon.name} - ${addon.price}</Text>
+                        ))
+                    )}
                   </>
+                )}
+                {(!viewBooking.detailedAddons || viewBooking.detailedAddons.length === 0) && (
+                    <Text mt={4}>No addons selected for this booking.</Text>
                 )}
               </Box>
             </ModalBody>

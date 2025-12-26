@@ -1,0 +1,5 @@
+env:
+  - variable: GA_MEASUREMENT_ID
+    secret: GA_MEASUREMENT_ID
+  - variable: GA_API_SECRET
+    secret: GA_API_SECRET
