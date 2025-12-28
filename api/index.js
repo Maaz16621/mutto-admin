@@ -7,7 +7,7 @@ const placeDetailsRoute = require('./placeDetails');
 const nominatimProxyRoute = require('./nominatimProxy');
 const googleToOsmRoute = require('./googleToOsm');
 const getServicesRoute = require('./getServices');
-const bookingCompleted = require('./bookingCompletedmpleted');
+const bookingCompleted = require('./bookingCompleted');
 const { runUpdate } = require('./updateVehicleType');
 
 
