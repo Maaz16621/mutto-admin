@@ -4,9 +4,6 @@ const axios = require('axios');
 const router = express.Router();
 
 router.post('/bookingCompleted', async (req, res) => {
-  res.json({ success: true, message: "Debug response from bookingCompleted" });
-  return;
-  /*
   try {
     // 🔐 Internal auth check
     const authHeader = req.headers.authorization;
@@ -43,7 +40,6 @@ router.post('/bookingCompleted', async (req, res) => {
     console.error('GA4 analytics error:', err.message);
     return res.status(500).json({ error: 'Analytics failed' });
   }
-  */
 });
 
 module.exports = router;
