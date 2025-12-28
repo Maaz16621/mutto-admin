@@ -3,7 +3,7 @@ const axios = require('axios');
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/bookingCompleted', async (req, res) => {
   try {
     // 🔐 Internal auth check
     const authHeader = req.headers.authorization;
