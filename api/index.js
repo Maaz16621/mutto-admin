@@ -22,7 +22,7 @@ app.use('/api', nominatimProxyRoute);
 app.use('/api', googleToOsmRoute);
 app.use('/api', getServicesRoute);
 app.use('/api', require('./copyDb'));
-app.use('/api', bookingCompleted);
+app.use('/api/bookingCompleted', bookingCompleted);
 
 app.get('/api/updateVehicles', async (req, res) => {
     try {
