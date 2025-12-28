@@ -47,7 +47,7 @@ async function copyDatabase() {
 }
 
 // API endpoint
-router.get('/copy-db', async (req, res) => {
+router.post('/copy-db', async (req, res) => {
   try {
      // 🔐 Internal auth check
      const authHeader = req.headers.authorization;
