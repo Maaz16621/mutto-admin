@@ -5,15 +5,15 @@ const axios = require('axios');
 
 async function triggerAnalyticsAPI(bookingId, bookingData) {
   try {
-    await axios.post(
-      'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app/api/analytics/booking-completed',
+    await axios.get(
+      'https://mutto-admin-api--mutto-84d97.asia-east1.hosted.app/api/copy-db',
       {
-        bookingId,
-        amount: bookingData.amount || 0,
-        userId: bookingData.userId,
-        currency: 'PKR'
-      },
-      {
+        params: {
+          bookingId,
+          amount: bookingData.amount || 0,
+          userId: bookingData.userId,
+          currency: 'AED'
+        },
         headers: {
           Authorization: `Bearer ${process.env.INTERNAL_API_KEY}`
         },

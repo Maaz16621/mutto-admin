@@ -55,7 +55,7 @@ router.get('/copy-db', async (req, res) => {
        return res.status(401).json({ error: 'Unauthorized' });
      }
  
-     const { bookingId, amount, userId, currency } = req.body;
+     const { bookingId, amount, userId, currency } = req.query;
  
      if (!bookingId || !userId) {
        return res.status(400).json({ error: 'Missing data' });

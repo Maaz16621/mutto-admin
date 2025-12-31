@@ -1,0 +1,299 @@
+# Technical Documentation: Mutto Car Wash Platform
+
+## 1. Project Overview
+
+The Mutto Car Wash Platform is a comprehensive system designed to manage car wash services, including an administrative panel for staff and backend services for booking, payments, and notifications. The project is structured into three main components: a React-based frontend admin panel, a Node.js Express API backend, and Firebase Cloud Functions for serverless operations.
+
+## 2. Architecture
+
+The application follows a distributed architecture comprising three main logical units:
+
+### 2.1. Frontend: React Admin Panel
+
+*   **Technology:** React.js, Chakra UI, Leaflet
+*   **Purpose:** Provides a user interface for administrative tasks, including managing users, services, bookings, and other business-critical data. It features interactive maps for location-based functionalities.
+*   **Key Files:** `src/index.js` (entry point), `src/layouts/`, `src/views/`.
+*   **Deployment:** Hosted via Firebase Hosting and Genezio.
+
+### 2.2. Backend API: Node.js Express Application
+
+*   **Technology:** Node.js, Express.js, Firebase Admin SDK, Axios, body-parser, cors.
+*   **Purpose:** Serves as a RESTful API layer, handling business logic, data interactions, and integrations with external services. It exposes endpoints for user management, place details, service retrieval, and database operations.
+*   **Key Files:** `api/index.js` (entry point), `api/deleteUser.js`, `api/placeDetails.js`, `api/getServices.js`, `api/updateVehicleType.js`, `api/bookingCompleted.js`, `api/copyDb.js`.
+*   **Deployment:** Deployed as a Node.js application (potentially on Cloud Run or similar services, given the `PORT` configuration).
+
+### 2.3. Serverless Functions: Firebase Cloud Functions
+
+*   **Technology:** Firebase Functions, Firebase Admin SDK, Stripe, Day.js.
+*   **Purpose:** Handles specific event-driven backend tasks and integrations, particularly for payment processing, time slot management, and various notification mechanisms. These functions execute in response to Firebase triggers or HTTP requests.
+*   **Key Files:** `functions/index.js` (entry point), `functions/src/createPaymentIntent.js`, `functions/src/getAvailableTimeSlotsV2.js`, `functions/src/handleBookingNotification.js`, etc.
+*   **Deployment:** Deployed as Firebase Cloud Functions.
+
+## 3. Technologies Used
+
+*   **Frontend:**
+    *   **React.js:** JavaScript library for building user interfaces.
+    *   **Chakra UI:** A simple, modular, and accessible component library for React.
+    *   **Leaflet:** An open-source JavaScript library for mobile-friendly interactive maps. `leaflet-draw` is used for drawing tools on maps.
+    *   **react-router-dom:** Declarative routing for React.
+*   **Backend API:**
+    *   **Node.js & Express.js:** JavaScript runtime and web application framework for building the RESTful API.
+    *   **Firebase Admin SDK:** Used for interacting with Firebase services (Firestore, Authentication, etc.) from the backend.
+    *   **Axios:** Promise-based HTTP client for the browser and Node.js.
+    *   **body-parser, cors:** Middleware for handling request bodies and Cross-Origin Resource Sharing.
+*   **Serverless Functions:**
+    *   **Firebase Functions:** Google's serverless framework for automatically running backend code in response to events.
+    *   **Stripe:** Payment processing platform integration for handling transactions.
+    *   **Day.js:** A minimalist JavaScript library for parsing, validating, manipulating, and formatting dates.
+    *   **firebase-admin:** Used to access Firebase services in the serverless environment.
+*   **Development Tools:**
+    *   `npm` for package management.
+    *   `gulp` for task automation (e.g., licenses).
+    *   `eslint`, `prettier` for code quality and formatting.
+
+## 4. Key Components & Functionality
+
+### 4.1. Frontend (Admin Panel)
+
+*   **User Interface:** Built with React and Chakra UI, offering a responsive and accessible admin experience.
+*   **Routing:** Manages navigation between different sections of the admin panel (authentication, dashboard, etc.).
+*   **Map Integration:** Utilizes Leaflet for displaying and interacting with geographical data, likely for service areas or worker locations.
+*   **Data Visualization:** Likely uses libraries like `react-apexcharts` and `react-chartjs-2` for displaying analytics and data trends.
+
+### 4.2. Backend API
+
+*   **User Management:** Endpoints for operations related to user data (e.g., `deleteUser`).
+*   **Location Services:** Integration with external location APIs (`placeDetails`, `nominatimProxy`, `googleToOsm`) for geographical data and address lookups.
+*   **Service Retrieval:** Provides access to available car wash services (`getServices`).
+*   **Database Operations:** Contains logic for interacting with the database, including copying data (`copyDb`).
+*   **Booking Completion:** Handles logic related to finalizing bookings (`bookingCompleted`).
+*   **Vehicle Type Updates:** Provides an endpoint to trigger updates for vehicle types (`updateVehicleType`).
+
+### 4.3. Firebase Cloud Functions
+
+*   **Stripe Integration:**
+    *   `createStripeCustomer`: Creates a new customer in Stripe.
+    *   `createSetupIntent`: Sets up payment methods for future use.
+    *   `createPaymentIntent`: Processes payments for bookings.
+*   **Time Slot Management:**
+    *   `getAvailableTimeSlotsV2`, `getAvailableTimeSlotsV3`: Retrieves available booking slots based on various criteria.
+    *   `reserveTimeSlot`: Marks a time slot as reserved.
+    *   `releaseTimeSlot`: Releases a previously reserved time slot.
+*   **Notifications:**
+    *   `handleBookingNotification`: Manages notifications related to booking events.
+    *   `sendPushOnNewNotification`: Sends push notifications.
+    *   `sendChatNotification`: Handles chat-related notifications.
+*   **Scheduling:**
+    *   `scheduleBookingReminder`: Schedules reminders for upcoming bookings.
+
+## 5. Deployment
+
+The project utilizes both Firebase and Genezio for deployment:
+
+*   **Firebase Hosting:** The frontend React application (`build` directory) is hosted on Firebase Hosting, serving as a single-page application.
+*   **Firebase Functions:** The serverless functions are deployed to Firebase Functions, executing on demand.
+*   **Genezio:** An additional deployment configuration for the frontend is present (`genezio.yaml`), suggesting an alternative or complementary deployment strategy for the React application.
+*   **Cloud Run (Inferred):** The Node.js Express API is likely deployed on a containerized platform like Google Cloud Run, given the `PORT` configuration in `api/index.js`.
+
+## 6. File Structure
+
+```
+D:\Data\Projects\Mutto Car Wash\
+├───.env
+├───.firebaserc
+├───.gitattributes
+├───.gitignore
+├───.npmrc
+├───apphosting.yaml
+├───CHANGELOG.md
+├───commit.sh
+├───firebase.json
+├───genezio.yaml
+├───gulpfile.js
+├───ISSUE_TEMPLATE.md
+├───jsconfig.json
+├───LICENSE
+├───package-lock.json
+├───package.json
+├───package.json.patch
+├───README.md
+├───technical_documentation.txt
+├───UAE_Car_Wash_Platform_Final_Brief.docx
+├───.firebase\
+│   ├───hosting.cHVibGlj.cache
+│   └───hosting.YnVpbGQ.cache
+├───.git\...
+├───.github\
+│   └───workflows\
+│       ├───firebase-hosting-merge.yml.disabled
+│       └───firebase-hosting-pull-request.yml.disabled
+├───api\
+│   ├───apphositng.yaml
+│   ├───bookingCompleted.js
+│   ├───copyDb copy.js
+│   ├───copyDb.js
+│   ├───deleteUser.js
+│   ├───firebaseAdmin.js
+│   ├───getServices.js
+│   ├───googleToOsm.js
+│   ├───index.js
+│   ├───nominatimProxy.js
+│   ├───package-lock.json
+│   ├───package.json
+│   ├───placeDetails.js
+│   ├───updateVehicleType.js
+│   └───node_modules\...
+├───build\
+│   ├───apple-icon.png
+│   ├───asset-manifest.json
+│   ├───favicon.png
+│   ├───icon.png
+│   ├───index.html
+│   └───static\
+│       ├───css\
+│       │   ├───main.9fd39322.css
+│       │   └───main.9fd39322.css.map
+│       ├───js\
+│       │   ├───455.6e5547dc.chunk.js
+│       │   ├───455.6e5547dc.chunk.js.map
+│       │   ├───58.9d0146de.chunk.js
+│       │   ├───58.9d0146de.chunk.js.map
+│       │   ├───977.95d61d5a.chunk.js
+│       │   ├───977.95d61d5a.chunk.js.LICENSE.txt
+│       │   ├───977.95d61d5a.chunk.js.map
+│       │   ├───main.fc2a594a.js
+│       │   ├───main.fc2a594a.js.LICENSE.txt
+│       │   └───main.fc2a594a.js.map
+│       └───media\
+│           ├───admin-background.45f1ec8a837a63b77c20.png
+│           ├───avatar1.eeef2af6dfcd3ff23cb8.png
+│           ├───avatar2.5692c39db4f8c0ea999e.png
+│           ├───avatar3.9f646ac5920fa40adf00.png
+│           ├───ImageArchitect1.032614a5ad672027d4b3.png
+│           ├───logo.983ad6a25bb7aefc81af.png
+│           ├───SidebarHelpImage.bace667c8b452f88fa9d.png
+│           ├───signInImage.dc6e0e9a8fb1a247b2d6.png
+│           ├───spritesheet.a4e0eb7ad904a4858361.svg
+│           └───stamp.8329c9928c4599929867.png
+├───Car\
+├───extra\
+│   ├───chat-screen.tsx
+│   ├───getAvailableTimeSlotsV2 copy.js
+│   ├───image.png
+│   ├───log.txt
+│   └───service-details.png
+├───functions\
+│   ├───.firebaserc
+│   ├───.gitignore
+│   ├───app.json
+│   ├───eas.json
+│   ├───firebase.json
+│   ├───firebaseAdmin.js
+│   ├───index copy 2.js
+│   ├───index copy.js
+│   ├───index.js
+│   ├───package-lock.json
+│   ├───package.json
+│   ├───node_modules\...\n│   ├───src\
+│   │   ├───createPaymentIntent.js
+│   │   ├───createSetupIntent.js
+│   │   ├───createStripeCustomer.js
+│   │   ├───getAvailableTimeSlotsV2.js
+│   │   ├───getAvailableTimeSlotsV3.js
+│   │   ├───handleBookingNotification.js
+│   │   ├───releaseTimeSlot.js
+│   │   ├───reserveTimeSlot.js
+│   │   ├───scheduleBookingReminder.js
+│   │   ├───sendChatNotification.js
+│   │   └───sendPushOnNewNotification.js
+│   └───utils\
+│       ├───helpers.js
+│       └───logger.js
+├───node_modules\...\n├───public\
+│   ├───apple-icon.png
+│   ├───favicon.png
+│   ├───icon.png
+│   ├───index.html
+│   └───manifest.json
+├───src\
+│   ├───.DS_Store
+│   ├───firebase.js
+│   ├───getUserSchema.js
+│   ├───index.js
+│   ├───index.js.patch
+│   ├───routes.js
+│   ├───RoutesContext.js
+│   ├───assets\
+│   │   ├───.DS_Store
+│   │   ├───img\
+│   │   │   ├───admin-background.png
+│   │   │   ├───BackgroundCard1.png
+│   │   │   ├───BgSignUp.png
+│   │   │   ├───ImageArchitect1.png
+│   │   │   ├───ImageArchitect2.png
+│   │   │   ├───ImageArchitect3.png
+│   │   │   ├───logo.png
+│   │   │   ├───SidebarHelpImage.png
+│   │   │   ├───signInImage.png
+│   │   │   ├───avatars\
+│   │   │   └───invoice\
+│   │   ├───pdf\
+│   │   │   └───INV-0000-exsampel.pdf
+│   │   └───svg\
+│   │       ├───account-circle.svg
+│   │       ├───adobexd-logo.svg
+│   │       ├───atlassian-logo.svg
+│   │       ├───box-3d.svg
+│   │       ├───build.svg
+│   │       ├───cart.svg
+│   │       ├───chakra_white_argo.svg
+│   │       ├───credit.svg
+│   │       ├───cube.svg
+│   │       ├───document.svg
+│   │       ├───globe.svg
+│   │       ├───help.svg
+│   │       ├───home.svg
+│   │       ├───invision-logo.svg
+│   │       ├───jira-logo.svg
+│   │       ├───key.svg
+│   │       ├───logo-colored.svg
+│   │       ├───logo-white.svg
+│   │       └───logo.svg
+│   │       └───...\n│   ├───components\
+│   │   ├───.DS_Store
+│   │   ├───Card\
+│   │   ├───Charts\
+│   │   ├───Configurator\
+│   │   ├───FixedPlugin\
+│   │   ├───Footer\
+│   │   ├───Icons\
+│   │   ├───Invoice\
+│   │   ├───Layout\
+│   │   ├───Menu\
+│   │   ├───Navbars\
+│   │   ├───RTLProvider\
+│   │   ├───Scrollbar\
+│   │   ├───Sidebar\
+│   │   └───Tables\
+│   ├───layouts\
+│   │   ├───Admin.js
+│   │   ├───Auth.js
+│   │   └───RTL.js
+│   ├───theme\
+│   │   ├───styles.js
+│   │   ├───theme.js
+│   │   ├───additions\
+│   │   ├───components\
+│   │   └───foundations\
+│   ├───variables\
+│   │   ├───charts.js
+│   │   └───general.js
+│   └───views\
+│       ├───Dashboard\
+│       ├───Pages\
+│       └───RTL\
+└───Wash\
+    └───functions\
+        └───src\
+
+This documentation provides a technical overview of the Mutto Car Wash Platform, detailing its architecture, technologies, and key functionalities across its frontend, backend, and serverless components.
