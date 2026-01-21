@@ -24,3 +24,6 @@ exports.scheduleBookingReminder = scheduleBookingReminder;
 exports.sendChatNotification = sendChatNotification;
 exports.reserveTimeSlot = reserveTimeSlot;
 exports.releaseTimeSlot = releaseTimeSlot
+exports.applyCoupon = require('./src/applyCoupon').applyCoupon;
+
+exports.getAvailableTimeSlotsV4 = require('./src/getAvailableTimeSlotsV4').getAvailableTimeSlotsV4;

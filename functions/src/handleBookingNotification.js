@@ -2,6 +2,73 @@
 const functions = require('firebase-functions/v1');
 const { admin, db } = require('../firebaseAdmin');
 const axios = require('axios');
+const crypto = require('crypto'); // required for hashing
+
+
+async function sendMetaPurchaseEvent({ bookingId, afterData }) {
+  const META_APP_ID = '877863721313586';
+  const META_ACCESS_TOKEN = functions.config().meta.access_token;
+
+  if (!META_ACCESS_TOKEN) {
+    console.error('[Meta] Access token missing');
+    return;
+  }
+
+  const hash = (value) =>
+    crypto.createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+
+  const payload = {
+    event: "CUSTOM_APP_EVENTS",
+    custom_events: [
+      {
+        _eventName: "fb_mobile_purchase",
+        _logTime: Math.floor(Date.now() / 1000),
+        _eventID: bookingId,
+        _valueToSum: Number(afterData.totalAmount || 0),
+        fb_currency: "AED"
+      }
+    ],
+    user_data: {
+      em: afterData.email ? [hash(afterData.email)] : undefined,
+      ph: afterData.phone ? [hash(afterData.phone)] : undefined
+    }
+  };
+
+  console.log(`[Meta] Sending payload for booking ${bookingId}:`, JSON.stringify(payload, null, 2));
+
+  let metaResponse = null;
+
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v18.0/${META_APP_ID}/activities`,
+      payload,
+      { params: { access_token: META_ACCESS_TOKEN } }
+    );
+
+    metaResponse = response.data;
+    console.log(`[Meta] Response for booking ${bookingId}:`, JSON.stringify(metaResponse, null, 2));
+  } catch (error) {
+    metaResponse = error?.response?.data || { error: error.message };
+    console.error(`[Meta] Failed for booking ${bookingId}:`, JSON.stringify(metaResponse, null, 2));
+  }
+
+  // Optional: save to Firestore for historical tracking
+  try {
+    await db.collection('metaLogs').add({
+      bookingId,
+      payload,
+      response: metaResponse,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log(`[Meta] Logged event to Firestore for booking ${bookingId}`);
+  } catch (err) {
+    console.error(`[Meta] Failed to save log for booking ${bookingId}:`, err.message);
+  }
+}
+
+
+
+
 
 async function triggerAnalyticsAPI(bookingId, bookingData) {
   try {
@@ -10,7 +77,7 @@ async function triggerAnalyticsAPI(bookingId, bookingData) {
       {
         params: {
           bookingId,
-          amount: bookingData.amount || 0,
+          amount: bookingData.totalAmount || 0,
           userId: bookingData.userId,
           currency: 'AED'
         },
@@ -136,30 +203,32 @@ exports.handleBookingNotification = functions.firestore
       }
     }
 
-    // 🔥 ANALYTICS TRIGGER — BOOKING COMPLETED
-if (
+ if (
   beforeData &&
   afterData &&
   beforeData.status !== 'completed' &&
   afterData.status === 'completed' &&
   !afterData.analyticsTracked
 ) {
-   db.collection('notifications').add({
-        title: 'Booking Completed',
-        body: `Your booking #${bookingId} has been completed.`,
-        userId: afterData.userId,
-        userType: 'user',
-        data: { bookingId },
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
+  await db.collection('notifications').add({
+    title: 'Booking Completed',
+    body: `Your booking #${bookingId} has been completed.`,
+    userId: afterData.userId,
+    userType: 'user',
+    data: { bookingId },
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // 🔥 META PURCHASE EVENT
+  await sendMetaPurchaseEvent({ bookingId, afterData });
 
   await triggerAnalyticsAPI(bookingId, afterData);
 
-  // Prevent duplicate firing
   await db.collection('bookings').doc(bookingId).update({
-    analyticsTracked: true
+    analyticsTracked: true,
   });
 }
+
 
 
     // Case 6: Booking cancelled by User

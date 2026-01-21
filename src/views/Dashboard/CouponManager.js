@@ -61,6 +61,7 @@ export default function CouponManager() {
     endDate: "",
     usageLimit: "",
     assignedServices: [],
+    usagePerUser: 1,
   });
   const [globalFilter, setGlobalFilter] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -104,6 +105,7 @@ export default function CouponManager() {
         ...form,
         value: Number(form.value),
         usageLimit: Number(form.usageLimit),
+        usagePerUser: Number(form.usagePerUser) || 1,
       };
 
       if (selectedCoupon) {
@@ -118,7 +120,7 @@ export default function CouponManager() {
       }
       fetchCoupons();
       onClose();
-      setForm({ code: "", type: "percentage", value: "", startDate: "", endDate: "", usageLimit: "", assignedServices: [] });
+      setForm({ code: "", type: "percentage", value: "", startDate: "", endDate: "", usageLimit: "", assignedServices: [], usagePerUser: 1 });
       setSelectedCoupon(null);
       setServiceInput("");
     } catch (err) {
@@ -131,8 +133,8 @@ export default function CouponManager() {
     setSelectedCoupon(coupon);
     setForm(
       coupon
-        ? { ...coupon, value: String(coupon.value), usageLimit: String(coupon.usageLimit), assignedServices: coupon.assignedServices || [] }
-        : { code: "", type: "percentage", value: "", startDate: "", endDate: "", usageLimit: "", assignedServices: [] }
+        ? { ...coupon, value: String(coupon.value), usageLimit: String(coupon.usageLimit), assignedServices: coupon.assignedServices || [], usagePerUser: coupon.usagePerUser || 1 }
+        : { code: "", type: "percentage", value: "", startDate: "", endDate: "", usageLimit: "", assignedServices: [], usagePerUser: 1 }
     );
     setServiceInput("");
     onOpen();
@@ -172,6 +174,7 @@ export default function CouponManager() {
       { Header: "Start Date", accessor: "startDate" },
       { Header: "End Date", accessor: "endDate" },
       { Header: "Usage Limit", accessor: "usageLimit" },
+      { Header: "Usage Per User", accessor: "usagePerUser" },
       {
         Header: "Assigned Services",
         accessor: "assignedServices",
@@ -319,6 +322,10 @@ export default function CouponManager() {
               <FormControl mb={3} isRequired>
                 <FormLabel>Usage Limit</FormLabel>
                 <Input type="number" value={form.usageLimit} onChange={(e) => setForm({ ...form, usageLimit: e.target.value })} />
+              </FormControl>
+              <FormControl mb={3}>
+                <FormLabel>Usage Per User</FormLabel>
+                <Input type="number" value={form.usagePerUser} onChange={(e) => setForm({ ...form, usagePerUser: e.target.value })} />
               </FormControl>
               <FormControl mb={3} isRequired>
                 <FormLabel>Start Date</FormLabel>

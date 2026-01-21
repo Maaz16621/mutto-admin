@@ -1,4 +1,3 @@
-
 const functions = require('firebase-functions/v1');
 const { db } = require('../firebaseAdmin');
 const dayjs = require('dayjs');
@@ -9,88 +8,156 @@ const { sendNotification } = require('../utils/helpers');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-exports.scheduleBookingReminder = functions.pubsub.schedule('every 15 minutes').timeZone('Asia/Dubai').onRun(async (context) => {
-  const nowUAE = dayjs().tz('Asia/Dubai');
+const UAE_TZ = 'Asia/Dubai';
 
-  try {
-    const bookingsSnapshot = await db.collection('bookings')
-      .where('status', '==', 'confirmed')
-      .get();
+exports.scheduleBookingReminder = functions.pubsub
+  .schedule('every 15 minutes')
+  .timeZone(UAE_TZ)
+  .onRun(async () => {
+    const nowUAE = dayjs().tz(UAE_TZ);
 
-    for (const doc of bookingsSnapshot.docs) {
-      const booking = doc.data();
-      const bookingId = doc.id;
+    try {
+      const bookingsSnapshot = await db
+        .collection('bookings')
+        .where('status', '==', 'confirmed')
+        .get();
 
-      if (!booking.selectedDate || !booking.selectedTime) {
-        console.warn(`Booking ${bookingId} is missing selectedDate or selectedTime. Skipping.`);
-        continue;
-      }
+      for (const doc of bookingsSnapshot.docs) {
+        const booking = doc.data();
+        const bookingId = doc.id;
 
-      const bookingStartTimeStr = booking.selectedTime.split(' to ')[0];
-      const bookingDateTimeUAE = dayjs(`${booking.selectedDate} ${bookingStartTimeStr}`, 'YYYY-MM-DD hh:mm A').tz('Asia/Dubai');
+        if (!booking.selectedDate || !booking.selectedTime) {
+          console.warn(`Booking ${bookingId} missing date/time`);
+          continue;
+        }
 
-      // --- Handle User Reminder ---
-      const isBookingToday = nowUAE.isSame(bookingDateTimeUAE, 'day');
-      if (isBookingToday && !booking.userReminderSent) {
-        const userReminderTimeUAE = bookingDateTimeUAE.subtract(6, 'hour');
-        if (nowUAE.isAfter(userReminderTimeUAE) && nowUAE.isBefore(bookingDateTimeUAE)) {
-          const userId = booking.userId;
-          if (userId) {
-            const userDoc = await db.collection('users').doc(userId).get();
-            if (userDoc.exists && userDoc.data().pushTokens && userDoc.data().pushTokens.length > 0) {
+        // ============================
+        // Parse booking time in UAE
+        // ============================
+        const bookingStartTimeStr = booking.selectedTime.split(' to ')[0];
+
+        const bookingDateTimeUAE = dayjs.tz(
+          `${booking.selectedDate} ${bookingStartTimeStr}`,
+          'YYYY-MM-DD hh:mm A',
+          UAE_TZ
+        );
+
+        if (!bookingDateTimeUAE.isValid()) {
+          console.warn(`Invalid datetime for booking ${bookingId}`);
+          continue;
+        }
+
+        // ❗ HARD GUARD: never process past bookings
+        if (bookingDateTimeUAE.isBefore(nowUAE)) {
+          continue;
+        }
+
+        // Minutes remaining
+        const diffMinutes = bookingDateTimeUAE.diff(nowUAE, 'minute');
+
+        // ============================
+        // USER REMINDER (6 HOURS)
+        // ============================
+        if (
+          !booking.userReminderSent &&
+          diffMinutes <= 360 &&
+          diffMinutes > 0
+        ) {
+          if (booking.userId) {
+            const userDoc = await db.collection('users').doc(booking.userId).get();
+
+            if (
+              userDoc.exists &&
+              Array.isArray(userDoc.data().pushTokens) &&
+              userDoc.data().pushTokens.length > 0
+            ) {
               let serviceName = 'your booked service';
+
               if (booking.serviceId) {
-                const serviceDoc = await db.collection('services').doc(booking.serviceId).get();
+                const serviceDoc = await db
+                  .collection('services')
+                  .doc(booking.serviceId)
+                  .get();
                 if (serviceDoc.exists) {
                   serviceName = serviceDoc.data().name || serviceName;
                 }
               }
 
-              const userTokens = userDoc.data().pushTokens;
-              const title = 'Booking Reminder';
-              const body = `Your ${serviceName} booking is scheduled in about 6 hours.`;
-              await sendNotification(userTokens, title, body, { bookingId }, [userId], 'user', false);
+              await sendNotification(
+                userDoc.data().pushTokens,
+                'Booking Reminder',
+                `Your ${serviceName} booking is scheduled in about 6 hours.`,
+                { bookingId },
+                [booking.userId],
+                'user',
+                false
+              );
             }
           }
-          await doc.ref.update({ userReminderSent: true, reminderSent: true });
-        }
-      }
 
-      // --- Handle Worker Reminder ---
-      if (isBookingToday && !booking.workerReminderSent) {
-        const workerId = booking.workerId;
-        if (workerId) {
-          const workerDoc = await db.collection('workers').doc(workerId).get();
+          // ✅ mark sent immediately (idempotent)
+          await doc.ref.update({
+            userReminderSent: true,
+            userReminderSentAt: new Date()
+          });
+        }
+
+        // ============================
+        // WORKER REMINDER
+        // ============================
+        if (
+          !booking.workerReminderSent &&
+          booking.workerId
+        ) {
+          const workerDoc = await db
+            .collection('workers')
+            .doc(booking.workerId)
+            .get();
+
           if (workerDoc.exists) {
             const workerData = workerDoc.data();
-            const drivingTime = workerData.drivingTime || 0; // Default to 0 if not set
-            const workerReminderOffset = drivingTime + 15; // driving time + 15 minutes
-            const workerReminderTimeUAE = bookingDateTimeUAE.subtract(workerReminderOffset, 'minute');
+            const drivingTime = Number(workerData.drivingTime || 0);
+            const workerReminderOffset = drivingTime + 15;
 
-            if (nowUAE.isAfter(workerReminderTimeUAE) && nowUAE.isBefore(bookingDateTimeUAE)) {
+            if (
+              diffMinutes <= workerReminderOffset &&
+              diffMinutes > 0
+            ) {
               if (workerData.expoPushToken) {
                 let serviceName = 'a service';
+
                 if (booking.serviceId) {
-                  const serviceDoc = await db.collection('services').doc(booking.serviceId).get();
+                  const serviceDoc = await db
+                    .collection('services')
+                    .doc(booking.serviceId)
+                    .get();
                   if (serviceDoc.exists) {
                     serviceName = serviceDoc.data().name || serviceName;
                   }
                 }
 
-                const workerToken = workerData.expoPushToken;
-                const title = 'Booking Reminder';
-                const body = `You have a booking for ${serviceName} at ${bookingStartTimeStr}.`;
-                await sendNotification([workerToken], title, body, { bookingId }, [workerId], 'worker', false);
+                await sendNotification(
+                  [workerData.expoPushToken],
+                  'Booking Reminder',
+                  `You have a booking for ${serviceName} at ${bookingStartTimeStr}.`,
+                  { bookingId },
+                  [booking.workerId],
+                  'worker',
+                  false
+                );
               }
-              await doc.ref.update({ workerReminderSent: true, reminderSent: true });
+
+              await doc.ref.update({
+                workerReminderSent: true,
+                workerReminderSentAt: new Date()
+              });
             }
           }
         }
       }
+    } catch (error) {
+      console.error('Error in scheduleBookingReminder:', error);
     }
-  } catch (error) {
-    console.error('Error in scheduleBookingReminder:', error);
-  }
-  return null;
-});
 
+    return null;
+  });
